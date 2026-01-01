@@ -1,6 +1,5 @@
 package com.app.service_catalog.security;
 
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,16 +11,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
-
-    private final JwtUtil jwtUtil;
-
-    public JwtAuthFilter(JwtUtil jwtUtil) {
-        this.jwtUtil = jwtUtil;
-    }
 
     @Override
     protected void doFilterInternal(
@@ -30,28 +25,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String header = request.getHeader("Authorization");
+        String userId = request.getHeader("X-USER-ID");
+        String rolesHeader = request.getHeader("X-USER-ROLES");
 
-        if (header != null && header.startsWith("Bearer ")) {
-            try {
-                String token = header.substring(7);
-                Claims claims = jwtUtil.extractAllClaims(token);
+        if (userId != null && rolesHeader != null) {
 
-                String userId = claims.getSubject();
-                String role = claims.get("role", String.class);
+            List<SimpleGrantedAuthority> authorities =
+                    Arrays.stream(rolesHeader.split(","))
+                            .map(String::trim)
+                            .map(SimpleGrantedAuthority::new)
+                            .collect(Collectors.toList());
 
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(
-                                userId,
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            userId,
+                            null,
+                            authorities
+                    );
 
-                SecurityContextHolder.getContext().setAuthentication(auth);
-
-            } catch (Exception ignored) {
-                // Invalid token → treated as anonymous
-            }
+            SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
         filterChain.doFilter(request, response);

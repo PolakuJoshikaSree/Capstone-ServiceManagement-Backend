@@ -1,15 +1,11 @@
 package com.app.service_catalog.controller;
 
-import com.app.service_catalog.dto.request.CreateCategoryRequest;
-import com.app.service_catalog.dto.request.ReorderCategoryRequest;
-import com.app.service_catalog.dto.request.UpdateCategoryRequest;
-import com.app.service_catalog.dto.request.UpdateCategoryStatusRequest;
+import com.app.service_catalog.dto.request.*;
 import com.app.service_catalog.dto.response.CategoryResponse;
 import com.app.service_catalog.model.ServiceCategory;
 import com.app.service_catalog.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,9 +18,12 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     // ---------------- CREATE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public CategoryResponse create(@Valid @RequestBody CreateCategoryRequest request) {
+    public CategoryResponse create(
+            @RequestHeader("X-USER-ROLES") String roles,
+            @Valid @RequestBody CreateCategoryRequest request) {
+
+        requireAdmin(roles);
 
         ServiceCategory category = ServiceCategory.builder()
                 .name(request.getName())
@@ -55,36 +54,51 @@ public class CategoryController {
     }
 
     // ---------------- UPDATE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public CategoryResponse update(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String id,
-            @RequestBody UpdateCategoryRequest request
-    ) {
+            @RequestBody UpdateCategoryRequest request) {
+
+        requireAdmin(roles);
         return categoryService.updateCategory(id, request);
     }
 
     // ---------------- TOGGLE STATUS (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}/status")
     public CategoryResponse updateStatus(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String id,
-            @RequestBody UpdateCategoryStatusRequest request
-    ) {
+            @RequestBody UpdateCategoryStatusRequest request) {
+
+        requireAdmin(roles);
         return categoryService.updateCategoryStatus(id, request.isActive());
     }
 
     // ---------------- REORDER (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/reorder")
-    public void reorder(@RequestBody List<ReorderCategoryRequest> requests) {
+    public void reorder(
+            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestBody List<ReorderCategoryRequest> requests) {
+
+        requireAdmin(roles);
         categoryService.reorderCategories(requests);
     }
 
     // ---------------- DELETE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable String id) {
+    public void delete(
+            @RequestHeader("X-USER-ROLES") String roles,
+            @PathVariable String id) {
+
+        requireAdmin(roles);
         categoryService.deleteCategory(id);
+    }
+
+    // ===== helpers =====
+    private void requireAdmin(String roles) {
+        if (!roles.contains("ROLE_ADMIN")) {
+            throw new SecurityException("Forbidden");
+        }
     }
 }

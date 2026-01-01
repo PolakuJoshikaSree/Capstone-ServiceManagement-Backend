@@ -17,8 +17,15 @@ import reactor.core.publisher.Mono;
 
 /**
  * JWT Authentication filter for the API Gateway.
- * Validates JWT tokens and passes them to downstream services.
- * Auth-service handles its own security - gateway just validates and passes tokens.
+ *
+ * Responsibilities:
+ * - Validate JWT token
+ * - Extract user identity & roles
+ * - Forward user context to downstream services via headers
+ *
+ * NOTE:
+ * - Gateway does NOT enforce business authorization
+ * - Downstream services decide access using headers
  */
 @Component
 public class JwtAuthFilter implements WebFilter {
@@ -31,37 +38,40 @@ public class JwtAuthFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        if (exchange.getRequest().getMethod().name().equals("OPTIONS")) {
+
+        // Allow preflight requests
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequest().getMethod().name())) {
             return chain.filter(exchange);
         }
 
         String path = exchange.getRequest().getURI().getPath();
-        System.out.println("GATEWAY FILTER HIT: " + exchange.getRequest().getMethod() + " " + path);
+        System.out.println("GATEWAY FILTER HIT → " + exchange.getRequest().getMethod() + " " + path);
 
-        // PUBLIC auth endpoints - no token required
+        // Public authentication endpoints
         if (isPublicAuthEndpoint(path)) {
             return chain.filter(exchange);
         }
 
-        // Extract token from Authorization header or cookie
+        // Extract JWT token
         String token = extractToken(exchange);
 
-        // If no token found, allow gateway to pass through - let downstream service decide
+        // If token is missing, let downstream service decide
         if (token == null) {
             return chain.filter(exchange);
         }
 
-        // Validate token if present
+        // Validate token
         if (!jwtUtil.validate(token)) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
 
-        // Build authentication context with valid token
         try {
+            // Extract details from JWT
             String username = jwtUtil.extractUsername(token);
             List<String> roles = jwtUtil.extractRoles(token);
 
+            // Convert roles to Spring authorities
             var authorities = roles.stream()
                     .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
@@ -69,30 +79,52 @@ public class JwtAuthFilter implements WebFilter {
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(username, null, authorities);
 
-            return chain.filter(exchange)
+            // Mutate request to forward user context to downstream services
+            ServerWebExchange mutatedExchange = exchange.mutate()
+                    .request(request -> request
+                            .header("X-USER-ID", username)
+                            .header("X-USER-ROLES", String.join(",", roles))
+                    )
+                    .build();
+
+            return chain.filter(mutatedExchange)
                     .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+
         } catch (Exception ex) {
+            ex.printStackTrace();
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
     }
 
+    /**
+     * Public auth endpoints that do not require JWT
+     */
     private boolean isPublicAuthEndpoint(String path) {
-        return path.equals("/auth-service/api/auth/register") ||
-                path.equals("/auth-service/api/auth/login") ||
-                path.equals("/auth-service/api/auth/forgot-password") ||
-                path.equals("/auth-service/api/auth/reset-password") ||
-                path.equals("/auth-service/api/auth/verify-email");
+        return path.equals("/auth-service/api/auth/register")
+                || path.equals("/auth-service/api/auth/login")
+                || path.equals("/auth-service/api/auth/forgot-password")
+                || path.equals("/auth-service/api/auth/reset-password")
+                || path.equals("/auth-service/api/auth/verify-email");
     }
 
+    /**
+     * Extract JWT token from cookie or Authorization header
+     */
     private String extractToken(ServerWebExchange exchange) {
-        // Try cookie first
+
+        // Cookie-based token (optional)
         if (exchange.getRequest().getCookies().getFirst("JoJosCookie") != null) {
-            return exchange.getRequest().getCookies().getFirst("JoJosCookie").getValue();
+            return exchange.getRequest().getCookies()
+                    .getFirst("JoJosCookie")
+                    .getValue();
         }
 
-        // Fallback to Authorization header
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        // Authorization header token
+        String authHeader = exchange.getRequest()
+                .getHeaders()
+                .getFirst(HttpHeaders.AUTHORIZATION);
+
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }

@@ -24,7 +24,7 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
     </properties>
 
-    <!-- SPRING CLOUD BOM -->
+    <!-- Spring Cloud BOM -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -39,7 +39,7 @@
 
     <dependencies>
 
-        <!-- Web -->
+        <!-- Web (MVC / Tomcat) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -51,7 +51,7 @@
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
-        <!-- Security -->
+        <!-- Security (only for method / header-based auth) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
@@ -88,12 +88,9 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        
+        
 
-        <dependency>
-        	<groupId>com.app.technician</groupId>
-        	<artifactId>technician-service</artifactId>
-        	<version>0.0.1-SNAPSHOT</version>
-        </dependency>
     </dependencies>
 
     <build>

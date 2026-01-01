@@ -1,16 +1,16 @@
 package com.app.booking.controller;
 
-import com.app.booking.dto.request.CreateBookingRequest;
-import com.app.booking.dto.request.RescheduleBookingRequest;
+import com.app.booking.dto.request.*;
 import com.app.booking.dto.response.*;
 import com.app.booking.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 
 import java.util.List;
 
@@ -21,114 +21,72 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    // ---------------- CREATE BOOKING (CUSTOMER) ----------------
     @PostMapping
-    public ResponseEntity<BookingResponse> createBooking(
+    public ResponseEntity<BookingResponse> create(
+            @RequestHeader("X-USER-ID") String customerId,
             @Valid @RequestBody CreateBookingRequest request) {
 
-        Authentication auth =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String customerId = auth.getName(); // JWT subject
-
-        BookingResponse response =
-                bookingService.createBooking(request, customerId);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(bookingService.createBooking(request, customerId));
     }
 
-    // ---------------- GET ALL BOOKINGS (ADMIN) ----------------
     @GetMapping
-    public ResponseEntity<List<BookingListResponse>> getAllBookings() {
-        return ResponseEntity.ok(bookingService.getAllBookings());
+    public List<BookingListResponse> getAll(
+            @RequestHeader("X-USER-ROLES") String roles) {
+
+        if (!roles.contains("ROLE_ADMIN"))
+            throw new SecurityException("Forbidden");
+
+        return bookingService.getAllBookings();
     }
 
-    // ---------------- GET BOOKING BY ID ----------------
-    @GetMapping("/{bookingId}")
-    public ResponseEntity<BookingDetailsResponse> getBookingByBookingId(
-            @PathVariable String bookingId) {
-
-        return ResponseEntity.ok(
-                bookingService.getBookingByBookingId(bookingId)
-        );
-    }
-
-    // ---------------- MY BOOKINGS (CUSTOMER) ----------------
     @GetMapping("/my-bookings")
-    public ResponseEntity<List<BookingListResponse>> getMyBookings() {
+    public List<BookingListResponse> myBookings(
+            @RequestHeader("X-USER-ID") String userId) {
 
-        Authentication auth =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String customerId = auth.getName();
-
-        return ResponseEntity.ok(
-                bookingService.getMyBookings(customerId)
-        );
+        return bookingService.getMyBookings(userId);
     }
 
-    // ---------------- BOOKING HISTORY (ADMIN) ----------------
-    @GetMapping("/history")
-    public ResponseEntity<List<BookingListResponse>> getBookingHistory() {
-        return ResponseEntity.ok(
-                bookingService.getBookingHistory()
-        );
-    }
-
-    // ---------------- RESCHEDULE (CUSTOMER) ----------------
-    @PutMapping("/{bookingId}/reschedule")
-    public ResponseEntity<RescheduleBookingResponse> rescheduleBooking(
-            @PathVariable String bookingId,
-            @Valid @RequestBody RescheduleBookingRequest request) {
-
-        return ResponseEntity.ok(
-                bookingService.rescheduleBooking(bookingId, request)
-        );
-    }
-
-    // ---------------- CANCEL (CUSTOMER) ----------------
-    @PutMapping("/{bookingId}/cancel")
-    public ResponseEntity<CancelBookingResponse> cancelBooking(
-            @PathVariable String bookingId) {
-
-        return ResponseEntity.ok(
-                bookingService.cancelBooking(bookingId)
-        );
-    }
-
-    // ---------------- ASSIGNED BOOKINGS (TECHNICIAN) ----------------
-    @GetMapping("/technician/assigned")
-    public ResponseEntity<List<BookingListResponse>> getAssignedBookings() {
-
-        Authentication auth =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String technicianId = auth.getName();
-
-        return ResponseEntity.ok(
-                bookingService.getAssignedBookingsForTechnician(technicianId)
-        );
-    }
-
-    // ---------------- ASSIGN TECHNICIAN (MANAGER / ADMIN) ----------------
     @PutMapping("/{bookingId}/assign")
-    public ResponseEntity<BookingResponse> assignTechnician(
+    public BookingResponse assign(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String bookingId,
             @RequestParam String technicianId) {
 
-        return ResponseEntity.ok(
-                bookingService.assignTechnician(bookingId, technicianId)
-        );
+        if (!roles.contains("ROLE_ADMIN") && !roles.contains("ROLE_MANAGER"))
+            throw new SecurityException("Forbidden");
+
+        return bookingService.assignTechnician(bookingId, technicianId);
     }
 
-    // ---------------- UPDATE STATUS (TECHNICIAN) ----------------
     @PutMapping("/{bookingId}/status")
-    public ResponseEntity<BookingResponse> updateBookingStatus(
+    public BookingResponse updateStatus(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String bookingId,
             @RequestParam String status) {
 
-        return ResponseEntity.ok(
-                bookingService.updateStatus(bookingId, status)
-        );
+        if (!roles.contains("ROLE_TECHNICIAN"))
+            throw new SecurityException("Forbidden");
+
+        return bookingService.updateStatus(bookingId, status);
+    }@GetMapping("/paged")
+    public Page<BookingListResponse> getAllPaged(
+            @RequestHeader("X-USER-ROLES") String roles,
+            Pageable pageable) {
+
+        if (!roles.contains("ROLE_ADMIN")) {
+            throw new SecurityException("Forbidden");
+        }
+
+        return bookingService.getAllBookingsPaged(pageable);
     }
+
+    @GetMapping("/my-bookings/paged")
+    public Page<BookingListResponse> getMyBookingsPaged(
+            @RequestHeader("X-USER-ID") String userId,
+            Pageable pageable) {
+
+        return bookingService.getMyBookingsPaged(userId, pageable);
+    }
+
 }

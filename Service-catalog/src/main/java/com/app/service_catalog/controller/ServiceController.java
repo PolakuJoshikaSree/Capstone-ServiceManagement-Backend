@@ -5,7 +5,6 @@ import com.app.service_catalog.dto.request.UpdateServiceRequest;
 import com.app.service_catalog.dto.response.ServiceItemResponse;
 import com.app.service_catalog.service.ServiceItemService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,9 +17,12 @@ public class ServiceController {
     private final ServiceItemService serviceItemService;
 
     // ---------------- CREATE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ServiceItemResponse create(@RequestBody CreateServiceRequest request) {
+    public ServiceItemResponse create(
+            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestBody CreateServiceRequest request) {
+
+        requireAdmin(roles);
         return serviceItemService.createService(request);
     }
 
@@ -43,29 +45,34 @@ public class ServiceController {
     }
 
     // ---------------- UPDATE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{serviceId}")
     public ServiceItemResponse update(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String serviceId,
-            @RequestBody UpdateServiceRequest request
-    ) {
+            @RequestBody UpdateServiceRequest request) {
+
+        requireAdmin(roles);
         return serviceItemService.updateService(serviceId, request);
     }
 
     // ---------------- TOGGLE STATUS (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{serviceId}/status")
     public ServiceItemResponse updateStatus(
+            @RequestHeader("X-USER-ROLES") String roles,
             @PathVariable String serviceId,
-            @RequestParam boolean active
-    ) {
+            @RequestParam boolean active) {
+
+        requireAdmin(roles);
         return serviceItemService.updateServiceStatus(serviceId, active);
     }
 
     // ---------------- DELETE (ADMIN ONLY) ----------------
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{serviceId}")
-    public void delete(@PathVariable String serviceId) {
+    public void delete(
+            @RequestHeader("X-USER-ROLES") String roles,
+            @PathVariable String serviceId) {
+
+        requireAdmin(roles);
         serviceItemService.deleteService(serviceId);
     }
 
@@ -73,8 +80,15 @@ public class ServiceController {
     @GetMapping("/search")
     public List<ServiceItemResponse> search(
             @RequestParam(required = false) String query,
-            @RequestParam(required = false) String skill
-    ) {
+            @RequestParam(required = false) String skill) {
+
         return serviceItemService.search(query, skill);
+    }
+
+    // ===== helpers =====
+    private void requireAdmin(String roles) {
+        if (!roles.contains("ROLE_ADMIN")) {
+            throw new SecurityException("Forbidden");
+        }
     }
 }

@@ -5,9 +5,8 @@ import com.app.auth.payload.ApiResponse;
 import com.app.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-
+@CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -22,16 +21,20 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponseDTO>> register(
             @Valid @RequestBody RegisterUserDTO dto) {
 
-        AuthResponseDTO res = authService.registerUser(dto);
-        return ResponseEntity.ok(success(res, "User registered successfully"));
+        return ResponseEntity.ok(success(
+                authService.registerUser(dto),
+                "User registered successfully"
+        ));
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponseDTO>> login(
             @Valid @RequestBody AuthRequestDTO request) {
 
-        AuthResponseDTO res = authService.authenticateUser(request);
-        return ResponseEntity.ok(success(res, "Login successful"));
+        return ResponseEntity.ok(success(
+                authService.authenticateUser(request),
+                "Login successful"
+        ));
     }
 
     @PostMapping("/logout")
@@ -48,16 +51,20 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponseDTO>> refreshToken(
             @RequestBody RefreshTokenRequest req) {
 
-        AuthResponseDTO res = authService.refreshAccessToken(req.getRefreshToken());
-        return ResponseEntity.ok(success(res, "Token refreshed"));
+        return ResponseEntity.ok(success(
+                authService.refreshAccessToken(req.getRefreshToken()),
+                "Token refreshed"
+        ));
     }
 
     @PostMapping("/validate-token")
     public ResponseEntity<ApiResponse<JwtTokenDTO>> validateToken(
             @RequestBody TokenRequest req) {
 
-        JwtTokenDTO dto = authService.validateToken(req.getToken());
-        return ResponseEntity.ok(success(dto, "Token valid"));
+        return ResponseEntity.ok(success(
+                authService.validateToken(req.getToken()),
+                "Token valid"
+        ));
     }
 
     @PostMapping("/forgot-password")
@@ -78,13 +85,8 @@ public class AuthController {
 
     @PostMapping("/change-password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
+            @RequestHeader("X-USER-ID") String userId,
             @Valid @RequestBody PasswordChangeDTO dto) {
-
-        String userId = String.valueOf(
-                SecurityContextHolder.getContext()
-                        .getAuthentication()
-                        .getPrincipal()
-        );
 
         authService.changePassword(
                 userId,
@@ -94,7 +96,15 @@ public class AuthController {
         return ResponseEntity.ok(success(null, "Password changed"));
     }
 
-    // ===== INNER DTOs =====
+    // ===== helpers =====
+    private <T> ApiResponse<T> success(T data, String msg) {
+        ApiResponse<T> api = new ApiResponse<>();
+        api.setStatus("SUCCESS");
+        api.setMessage(msg);
+        api.setData(data);
+        return api;
+    }
+
     public static class RefreshTokenRequest {
         private String refreshToken;
         public String getRefreshToken() { return refreshToken; }
@@ -105,13 +115,5 @@ public class AuthController {
         private String token;
         public String getToken() { return token; }
         public void setToken(String token) { this.token = token; }
-    }
-
-    private <T> ApiResponse<T> success(T data, String msg) {
-        ApiResponse<T> api = new ApiResponse<>();
-        api.setStatus("SUCCESS");
-        api.setMessage(msg);
-        api.setData(data);
-        return api;
     }
 }
