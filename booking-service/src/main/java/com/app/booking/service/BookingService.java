@@ -1,8 +1,10 @@
 package com.app.booking.service;
 
 import com.app.booking.client.BillingClient;
+import com.app.booking.client.NotificationClient;
 import com.app.booking.dto.billing.CreateInvoiceRequest;
 import com.app.booking.dto.billing.InvoiceLineItem;
+import com.app.booking.dto.CreateNotificationRequest;
 import com.app.booking.dto.request.CreateBookingRequest;
 import com.app.booking.dto.response.BookingListResponse;
 import com.app.booking.dto.response.BookingResponse;
@@ -25,8 +27,9 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final BillingClient billingClient;
+    private final NotificationClient notificationClient;
 
-    // ================= CREATE =================
+    // ================= CREATE BOOKING =================
     public BookingResponse createBooking(CreateBookingRequest request, String customerId) {
 
         Booking booking = Booking.builder()
@@ -44,6 +47,17 @@ public class BookingService {
                 .build();
 
         bookingRepository.save(booking);
+
+        // 🔔 NOTIFICATION → CUSTOMER
+        notificationClient.sendNotification(
+                CreateNotificationRequest.builder()
+                        .userId(customerId)
+                        .role("CUSTOMER")
+                        .title("Booking Created")
+                        .message("Your booking " + booking.getBookingId() + " was created successfully")
+                        .type("BOOKING_CREATED")
+                        .build()
+        );
 
         return new BookingResponse(
                 booking.getBookingId(),
@@ -66,7 +80,7 @@ public class BookingService {
                 .toList();
     }
 
-    // ================= TECHNICIAN =================
+    // ================= TECHNICIAN BOOKINGS =================
     public List<BookingListResponse> getAssignedBookingsForTechnician(String technicianId) {
         return bookingRepository.findByTechnicianId(technicianId)
                 .stream()
@@ -81,13 +95,23 @@ public class BookingService {
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
         if (booking.getStatus() != BookingStatus.REQUESTED) {
-            throw new IllegalArgumentException(
-                    "Only REQUESTED bookings can be assigned");
+            throw new IllegalArgumentException("Only REQUESTED bookings can be assigned");
         }
 
         booking.setTechnicianId(technicianId);
         booking.setStatus(BookingStatus.ASSIGNED);
         bookingRepository.save(booking);
+
+        // 🔔 NOTIFICATION → TECHNICIAN
+        notificationClient.sendNotification(
+                CreateNotificationRequest.builder()
+                        .userId(technicianId)
+                        .role("TECHNICIAN")
+                        .title("New Service Assigned")
+                        .message("You have been assigned booking " + booking.getBookingId())
+                        .type("TECHNICIAN_ASSIGNED")
+                        .build()
+        );
 
         return new BookingResponse(
                 booking.getBookingId(),
@@ -104,14 +128,13 @@ public class BookingService {
         BookingStatus newStatus = BookingStatus.valueOf(status);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
-            throw new IllegalArgumentException(
-                    "Cancelled booking cannot be updated");
+            throw new IllegalArgumentException("Cancelled booking cannot be updated");
         }
 
         booking.setStatus(newStatus);
         bookingRepository.save(booking);
 
-        // ===== COMPLETION FLOW =====
+        // ================= COMPLETED FLOW =================
         if (newStatus == BookingStatus.COMPLETED) {
 
             billingClient.createInvoice(
@@ -125,6 +148,17 @@ public class BookingService {
                                             .quantity(1)
                                             .build()
                             ))
+                            .build()
+            );
+
+            // 🔔 NOTIFICATION → CUSTOMER
+            notificationClient.sendNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(booking.getCustomerId())
+                            .role("CUSTOMER")
+                            .title("Service Completed")
+                            .message("Your booking " + booking.getBookingId() + " is completed")
+                            .type("BOOKING_COMPLETED")
                             .build()
             );
         }

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JwtUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">api-gateway</a> &gt; <a href="index.source.html" class="el_package">com.app.gateway.security</a> &gt; <span class="el_source">JwtUtil.java</span></div><h1>JwtUtil.java</h1><pre class="source lang-java linenums">package com.app.gateway.security;
+
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+
+/**
+ * JWT utility component for validating and extracting claims from JWT tokens.
+ * Provides methods for token validation and claim extraction.
+ */
+@Component
+<span class="fc" id="L21">public class JwtUtil {</span>
+
+	@Value(&quot;${jwt.secret}&quot;)
+	private String jwtSecret;
+
+	/**
+	 * Get the signing key for JWT validation.
+	 * Uses the same approach as auth-service: plain text UTF-8 conversion.
+	 */
+	private Key getSigningKey() {
+<span class="fc" id="L31">	    return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));</span>
+	}
+
+	/**
+	 * Extract all claims from the JWT token.
+	 */
+	public Claims extractAllClaims(String token) {
+<span class="fc" id="L38">		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();</span>
+	}
+
+	/**
+	 * Check if password change is forced for the user.
+	 */
+    public boolean getForcePwdChange(String token) {
+<span class="nc" id="L45">        Claims claims = Jwts.parserBuilder()</span>
+<span class="nc" id="L46">                .setSigningKey(getSigningKey())</span>
+<span class="nc" id="L47">                .build()</span>
+<span class="nc" id="L48">                .parseClaimsJws(token)</span>
+<span class="nc" id="L49">                .getBody();</span>
+
+<span class="nc" id="L51">        Boolean value = claims.get(&quot;forcePwdChange&quot;, Boolean.class);</span>
+<span class="nc bnc" id="L52" title="All 4 branches missed.">        return value != null &amp;&amp; value;</span>
+    }
+
+	/**
+	 * Validate JWT token signature and expiration.
+	 */
+	public boolean validate(String token) {
+		try {
+<span class="fc" id="L60">			extractAllClaims(token);</span>
+<span class="fc" id="L61">			return true;</span>
+<span class="fc" id="L62">		} catch (Exception ex) {</span>
+<span class="fc" id="L63">			return false;</span>
+		}
+	}
+
+	/**
+	 * Extract username (subject) from JWT token.
+	 */
+	public String extractUsername(String token) {
+<span class="fc" id="L71">		return extractAllClaims(token).getSubject();</span>
+	}
+
+	/**
+	 * Extract roles from JWT token claims.
+	 * The auth-service stores roles as a single &quot;role&quot; claim with format like &quot;ROLE_USER&quot; or &quot;USER&quot;.
+	 */
+	public List&lt;String&gt; extractRoles(String token) {
+<span class="fc" id="L79">		Claims claims = extractAllClaims(token);</span>
+
+		// Try to get single role claim first (auth-service format)
+<span class="fc" id="L82">		Object roleObj = claims.get(&quot;role&quot;);</span>
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">		if (roleObj != null) {</span>
+<span class="fc" id="L84">			String roleStr = roleObj.toString().trim();</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">			if (!roleStr.isEmpty()) {</span>
+				// Ensure it has ROLE_ prefix
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">				String role = roleStr.startsWith(&quot;ROLE_&quot;) ? roleStr : &quot;ROLE_&quot; + roleStr;</span>
+<span class="fc" id="L88">				return List.of(role);</span>
+			}
+		}
+
+		// Fallback to plural &quot;roles&quot; claim (comma-separated, legacy format)
+<span class="nc" id="L93">		Object rolesObj = claims.get(&quot;roles&quot;);</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">		if (rolesObj == null)</span>
+<span class="nc" id="L95">			return List.of();</span>
+
+<span class="nc" id="L97">		String s = rolesObj.toString().replace(&quot;[&quot;, &quot;&quot;).replace(&quot;]&quot;, &quot;&quot;).replace(&quot; &quot;, &quot;&quot;);</span>
+
+<span class="nc bnc" id="L99" title="All 2 branches missed.">		if (s.isEmpty())</span>
+<span class="nc" id="L100">			return List.of();</span>
+
+<span class="nc" id="L102">		return Arrays.stream(s.split(&quot;,&quot;))</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">				.map(r -&gt; r.startsWith(&quot;ROLE_&quot;) ? r : &quot;ROLE_&quot; + r)</span>
+<span class="nc" id="L104">				.collect(Collectors.toList());</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

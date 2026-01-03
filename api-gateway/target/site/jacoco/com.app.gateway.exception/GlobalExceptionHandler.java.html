@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlobalExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">api-gateway</a> &gt; <a href="index.source.html" class="el_package">com.app.gateway.exception</a> &gt; <span class="el_source">GlobalExceptionHandler.java</span></div><h1>GlobalExceptionHandler.java</h1><pre class="source lang-java linenums">package com.app.gateway.exception;
+
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.support.WebExchangeBindException;
+
+import com.app.gateway.payload.ApiResponse;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+<span class="fc" id="L17">public class GlobalExceptionHandler {</span>
+
+    @ExceptionHandler(WebExchangeBindException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleValidation(WebExchangeBindException ex) {
+<span class="fc" id="L21">        Map&lt;String, String&gt; errors = ex.getFieldErrors().stream()</span>
+<span class="fc" id="L22">                .collect(Collectors.toMap(</span>
+<span class="fc" id="L23">                        fieldError -&gt; fieldError.getField(),</span>
+<span class="fc" id="L24">                        fieldError -&gt; fieldError.getDefaultMessage(),</span>
+<span class="nc" id="L25">                        (existing, replacement) -&gt; existing,</span>
+                        LinkedHashMap::new
+                ));
+
+<span class="fc" id="L29">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, &quot;Validation failed&quot;, errors);</span>
+<span class="fc" id="L30">        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(api);</span>
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleConstraint(ConstraintViolationException ex) {
+<span class="fc" id="L35">        Map&lt;String, String&gt; errors = ex.getConstraintViolations().stream()</span>
+<span class="fc" id="L36">                .collect(Collectors.toMap(</span>
+<span class="fc" id="L37">                        violation -&gt; violation.getPropertyPath().toString(),</span>
+<span class="fc" id="L38">                        violation -&gt; violation.getMessage(),</span>
+<span class="nc" id="L39">                        (existing, replacement) -&gt; existing,</span>
+                        LinkedHashMap::new
+                ));
+
+<span class="fc" id="L43">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, &quot;Validation failed&quot;, errors);</span>
+<span class="fc" id="L44">        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(api);</span>
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleIllegalArg(IllegalArgumentException ex) {
+<span class="fc" id="L49">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, ex.getMessage(), null);</span>
+<span class="fc" id="L50">        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(api);</span>
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleIllegalState(IllegalStateException ex) {
+<span class="fc" id="L55">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, ex.getMessage(), null);</span>
+<span class="fc" id="L56">        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(api);</span>
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleSecurity(SecurityException ex) {
+<span class="fc" id="L61">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, ex.getMessage(), null);</span>
+<span class="fc" id="L62">        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(api);</span>
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;ApiResponse&lt;Object&gt;&gt; handleAll(Exception ex) {
+<span class="fc" id="L67">        Map&lt;String, String&gt; details = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L68">        details.put(&quot;exception&quot;, ex.getClass().getSimpleName());</span>
+<span class="fc" id="L69">        details.put(&quot;message&quot;, ex.getMessage());</span>
+
+<span class="fc" id="L71">        ApiResponse&lt;Object&gt; api = new ApiResponse&lt;&gt;(&quot;ERROR&quot;, &quot;Internal server error&quot;, details);</span>
+<span class="fc" id="L72">        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(api);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
