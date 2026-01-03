@@ -1,11 +1,15 @@
 package com.app.auth.controller;
 
 import com.app.auth.dto.*;
+import com.app.auth.dto.TechnicianSimpleResponse;
 import com.app.auth.payload.ApiResponse;
 import com.app.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 @CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/auth")
@@ -17,6 +21,7 @@ public class AuthController {
         this.authService = authService;
     }
 
+    // ================= REGISTER =================
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponseDTO>> register(
             @Valid @RequestBody RegisterUserDTO dto) {
@@ -27,6 +32,7 @@ public class AuthController {
         ));
     }
 
+    // ================= LOGIN =================
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponseDTO>> login(
             @Valid @RequestBody AuthRequestDTO request) {
@@ -37,6 +43,7 @@ public class AuthController {
         ));
     }
 
+    // ================= LOGOUT =================
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader("Authorization") String authHeader) {
@@ -47,6 +54,7 @@ public class AuthController {
         return ResponseEntity.ok(success(null, "Logged out"));
     }
 
+    // ================= REFRESH TOKEN =================
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<AuthResponseDTO>> refreshToken(
             @RequestBody RefreshTokenRequest req) {
@@ -57,6 +65,7 @@ public class AuthController {
         ));
     }
 
+    // ================= VALIDATE TOKEN =================
     @PostMapping("/validate-token")
     public ResponseEntity<ApiResponse<JwtTokenDTO>> validateToken(
             @RequestBody TokenRequest req) {
@@ -67,6 +76,7 @@ public class AuthController {
         ));
     }
 
+    // ================= PASSWORD =================
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequestDTO dto) {
@@ -96,7 +106,17 @@ public class AuthController {
         return ResponseEntity.ok(success(null, "Password changed"));
     }
 
-    // ===== helpers =====
+    // ================= TECHNICIANS =================
+    @GetMapping("/users/technicians")
+    public ResponseEntity<ApiResponse<List<TechnicianSimpleResponse>>> getTechnicians() {
+
+        return ResponseEntity.ok(success(
+                authService.getAllTechnicians(),
+                "Technicians fetched successfully"
+        ));
+    }
+
+    // ================= helpers =================
     private <T> ApiResponse<T> success(T data, String msg) {
         ApiResponse<T> api = new ApiResponse<>();
         api.setStatus("SUCCESS");
@@ -105,6 +125,7 @@ public class AuthController {
         return api;
     }
 
+    // ===== inner DTOs =====
     public static class RefreshTokenRequest {
         private String refreshToken;
         public String getRefreshToken() { return refreshToken; }

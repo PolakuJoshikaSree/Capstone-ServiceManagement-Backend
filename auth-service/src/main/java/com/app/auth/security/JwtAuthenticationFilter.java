@@ -1,7 +1,5 @@
 package com.app.auth.security;
 
-import com.app.auth.entity.UserEntity;
-import com.app.auth.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -16,24 +14,22 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
-        this.userRepository = userRepository;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         String bearer = request.getHeader("Authorization");
 
@@ -42,25 +38,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             try {
                 Claims claims = jwtUtil.validateToken(token).getBody();
-                String userId = claims.getSubject(); 
 
-                Optional<UserEntity> opt = userRepository.findById(userId);
-                if (opt.isPresent()) {
-                    UserEntity user = opt.get();
+                String userId = claims.getSubject(); // ✅ USER ID (STRING)
+                String role = claims.get("role", String.class);
 
-                    SimpleGrantedAuthority authority =
-                            new SimpleGrantedAuthority("ROLE_" + user.getRole().name());
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                Collections.singleton(
+                                        new SimpleGrantedAuthority("ROLE_" + role)
+                                )
+                        );
 
-                    UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(
-                                    user.getId(),
-                                    null,
-                                    Collections.singleton(authority)
-                            );
+                SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                // Invalid token → do nothing, Spring Security will block
+                SecurityContextHolder.clearContext();
             }
         }
 

@@ -2,6 +2,7 @@ package com.app.auth.service;
 
 import com.app.auth.dto.*;
 import com.app.auth.entity.UserEntity;
+import com.app.auth.enums.Role;
 import com.app.auth.mapper.UserMapper;
 import com.app.auth.repository.UserRepository;
 import com.app.auth.security.JwtUtil;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class AuthService {
@@ -176,4 +178,17 @@ public class AuthService {
         dto.setExpiresAt(jwtUtil.getExpiresAt(token));
         return dto;
     }
+ // ================= TECHNICIANS =================
+    public List<TechnicianSimpleResponse> getAllTechnicians() {
+
+        return userRepository.findByRole(Role.TECHNICIAN)
+                .stream()
+                .map(user -> new TechnicianSimpleResponse(
+                        user.getId(),
+                        user.getFirstName()
+                ))
+                .toList();
+    }
+
+    
 }

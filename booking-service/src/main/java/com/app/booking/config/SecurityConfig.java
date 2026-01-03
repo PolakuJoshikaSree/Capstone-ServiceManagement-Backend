@@ -1,84 +1,46 @@
 package com.app.booking.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.app.booking.security.AuthFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-    @Value("${jwt.secret}")
-    private String jwtSecret;
+    private final AuthFilter authFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
             .csrf(csrf -> csrf.disable())
+            .cors(cors -> {})
+
+            .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
+
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // CUSTOMER
-                .requestMatchers("/api/bookings").hasRole("CUSTOMER")
-                .requestMatchers("/api/bookings/my-bookings").hasRole("CUSTOMER")
-                .requestMatchers("/api/bookings/*/cancel").hasRole("CUSTOMER")
+                // allow booking creation for logged-in users
+                .requestMatchers(HttpMethod.POST, "/api/bookings").authenticated()
 
-                // ADMIN
-                .requestMatchers("/api/bookings/*/assign").hasRole("ADMIN")
-                .requestMatchers("/api/bookings").hasRole("ADMIN")
+                // other booking APIs
+                .requestMatchers("/api/bookings/**").authenticated()
 
-                // TECHNICIAN
-                .requestMatchers("/api/bookings/*/status").hasRole("TECHNICIAN")
-                .requestMatchers("/api/bookings/technician/assigned").hasRole("TECHNICIAN")
-
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
-            .oauth2ResourceServer(oauth2 ->
-                oauth2.jwt(jwt ->
-                    jwt
-                        .decoder(jwtDecoder())
-                        .jwtAuthenticationConverter(jwtAuthenticationConverter())
-                )
-            );
+
+            .httpBasic(basic -> basic.disable())
+            .formLogin(form -> form.disable());
 
         return http.build();
-    }
-
-    @Bean
-    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-
-        converter.setJwtGrantedAuthoritiesConverter((Jwt jwt) -> {
-            String role = jwt.getClaimAsString("role");
-            if (role == null) return List.of();
-            return List.of(new SimpleGrantedAuthority("ROLE_" + role));
-        });
-
-        return converter;
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-
-        SecretKey secretKey = new SecretKeySpec(
-                jwtSecret.getBytes(StandardCharsets.UTF_8),
-                "HmacSHA256"
-        );
-
-        return NimbusJwtDecoder.withSecretKey(secretKey).build();
     }
 }
