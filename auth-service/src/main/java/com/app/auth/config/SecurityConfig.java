@@ -44,6 +44,7 @@ public class SecurityConfig {
                 jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class
             )
+
             .httpBasic(basic -> basic.disable())
             .formLogin(form -> form.disable());
 
