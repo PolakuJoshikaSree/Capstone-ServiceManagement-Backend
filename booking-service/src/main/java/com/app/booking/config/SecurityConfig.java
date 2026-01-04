@@ -22,19 +22,14 @@ public class SecurityConfig {
 
         http
             .csrf(csrf -> csrf.disable())
-            .cors(cors -> {})
+
 
             .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
 
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                // allow booking creation for logged-in users
                 .requestMatchers(HttpMethod.POST, "/api/bookings").authenticated()
-
-                // other booking APIs
                 .requestMatchers("/api/bookings/**").authenticated()
-
                 .anyRequest().permitAll()
             )
 
@@ -44,3 +39,4 @@ public class SecurityConfig {
         return http.build();
     }
 }
+

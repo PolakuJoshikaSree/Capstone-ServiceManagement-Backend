@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/billing/invoices")
 @RequiredArgsConstructor
@@ -14,6 +16,7 @@ public class BillingController {
 
     private final BillingService billingService;
 
+    // ================= CREATE INVOICE (FROM BOOKING SERVICE) =================
     @PostMapping
     public ResponseEntity<Void> createInvoice(
             @RequestBody CreateInvoiceRequest request) {
@@ -22,8 +25,25 @@ public class BillingController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    // ================= DUMMY PAYMENT =================
     @PutMapping("/{bookingId}/pay")
-    public Invoice markPaid(@PathVariable String bookingId) {
-        return billingService.markPaid(bookingId);
+    public ResponseEntity<Invoice> markPaid(@PathVariable String bookingId) {
+        return ResponseEntity.ok(billingService.markPaid(bookingId));
+    }
+
+    // ================= ADMIN =================
+    @GetMapping
+    public ResponseEntity<List<Invoice>> getAllInvoices() {
+        return ResponseEntity.ok(billingService.getAllInvoices());
+    }
+
+    // ================= CUSTOMER (THIS FIXES YOUR UI) =================
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<List<Invoice>> getInvoicesByCustomer(
+            @PathVariable String customerId) {
+
+        return ResponseEntity.ok(
+                billingService.getInvoicesByCustomer(customerId)
+        );
     }
 }

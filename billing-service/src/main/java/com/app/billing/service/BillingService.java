@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -15,8 +16,10 @@ public class BillingService {
 
     private final InvoiceRepository invoiceRepository;
 
+    // ================= CREATE INVOICE =================
     public void createInvoice(CreateInvoiceRequest request) {
 
+        // Avoid duplicate invoice for same booking
         if (invoiceRepository.findByBookingId(request.getBookingId()).isPresent()) {
             return;
         }
@@ -32,12 +35,15 @@ public class BillingService {
                 .invoiceNumber("INV-" + UUID.randomUUID().toString().substring(0, 8))
                 .bookingId(request.getBookingId())
                 .customerId(request.getCustomerId())
-                .items(request.getItems().stream()
-                        .map(i -> new InvoiceLineItem(
-                                i.getDescription(),
-                                i.getUnitPrice(),
-                                i.getQuantity()))
-                        .toList())
+                .items(
+                        request.getItems().stream()
+                                .map(i -> new InvoiceLineItem(
+                                        i.getDescription(),
+                                        i.getUnitPrice(),
+                                        i.getQuantity()
+                                ))
+                                .toList()
+                )
                 .subtotal(subtotal)
                 .tax(tax)
                 .totalAmount(total)
@@ -49,6 +55,7 @@ public class BillingService {
         invoiceRepository.save(invoice);
     }
 
+    // ================= MARK PAYMENT PAID (DUMMY PAYMENT) =================
     public Invoice markPaid(String bookingId) {
 
         Invoice invoice = invoiceRepository.findByBookingId(bookingId)
@@ -59,5 +66,15 @@ public class BillingService {
         invoice.setPaidAt(LocalDateTime.now());
 
         return invoiceRepository.save(invoice);
+    }
+
+    // ================= ADMIN / DEBUG =================
+    public List<Invoice> getAllInvoices() {
+        return invoiceRepository.findAll();
+    }
+
+    // ================= CUSTOMER =================
+    public List<Invoice> getInvoicesByCustomer(String customerId) {
+        return invoiceRepository.findByCustomerId(customerId);
     }
 }

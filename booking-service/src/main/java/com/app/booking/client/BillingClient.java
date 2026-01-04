@@ -13,7 +13,7 @@ public class BillingClient {
 
     public void createInvoice(CreateInvoiceRequest request) {
         webClient.post()
-                .uri("http://billing-service/api/billing/invoices")
+                .uri("http://localhost:8765/api/billing/invoices")
                 .bodyValue(request)
                 .retrieve()
                 .toBodilessEntity()

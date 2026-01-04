@@ -31,6 +31,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        // 🔥 1. Skip preflight requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 🔥 2. Skip public auth endpoints
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/auth")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 🔒 3. Process JWT for protected endpoints
         String bearer = request.getHeader("Authorization");
 
         if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {
@@ -39,7 +53,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtUtil.validateToken(token).getBody();
 
-                String userId = claims.getSubject(); // ✅ USER ID (STRING)
+                String userId = claims.getSubject();
                 String role = claims.get("role", String.class);
 
                 UsernamePasswordAuthenticationToken authentication =
@@ -54,11 +68,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
             } catch (Exception ex) {
-                // Invalid token → do nothing, Spring Security will block
                 SecurityContextHolder.clearContext();
             }
         }
 
         filterChain.doFilter(request, response);
     }
+
 }

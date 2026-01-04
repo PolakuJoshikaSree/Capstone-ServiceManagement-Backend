@@ -8,6 +8,9 @@ import com.app.auth.enums.Role;
 import com.app.auth.mapper.UserMapper;
 import com.app.auth.payload.PageResponse;
 import com.app.auth.repository.UserRepository;
+
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 
 @Service
@@ -86,4 +89,11 @@ public class UserService {
         resp.setTotalPages(p.getTotalPages());
         return resp;
     }
+    public List<UserProfileResponseDTO> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toProfileDto) // ✅ FIXED
+                .toList();
+    }
+
 }

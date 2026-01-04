@@ -1,33 +1,35 @@
 package com.app.booking.service;
 
-import com.app.booking.client.BillingClient;
 import com.app.booking.client.NotificationClient;
-import com.app.booking.dto.billing.CreateInvoiceRequest;
-import com.app.booking.dto.billing.InvoiceLineItem;
 import com.app.booking.dto.CreateNotificationRequest;
 import com.app.booking.dto.request.CreateBookingRequest;
 import com.app.booking.dto.response.BookingListResponse;
 import com.app.booking.dto.response.BookingResponse;
+import com.app.booking.event.BookingCompletedEvent;
 import com.app.booking.exception.BookingNotFoundException;
 import com.app.booking.model.Booking;
 import com.app.booking.model.BookingStatus;
 import com.app.booking.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static com.app.booking.config.RabbitConfig.EXCHANGE;
+import static com.app.booking.config.RabbitConfig.ROUTING_KEY;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingService {
 
     private final BookingRepository bookingRepository;
-    private final BillingClient billingClient;
     private final NotificationClient notificationClient;
+    private final RabbitTemplate rabbitTemplate;
 
     // ================= CREATE BOOKING =================
     public BookingResponse createBooking(CreateBookingRequest request, String customerId) {
@@ -48,7 +50,6 @@ public class BookingService {
 
         bookingRepository.save(booking);
 
-        // 🔔 NOTIFICATION → CUSTOMER
         notificationClient.sendNotification(
                 CreateNotificationRequest.builder()
                         .userId(customerId)
@@ -80,7 +81,6 @@ public class BookingService {
                 .toList();
     }
 
-    // ================= TECHNICIAN BOOKINGS =================
     public List<BookingListResponse> getAssignedBookingsForTechnician(String technicianId) {
         return bookingRepository.findByTechnicianId(technicianId)
                 .stream()
@@ -94,15 +94,10 @@ public class BookingService {
         Booking booking = bookingRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
-        if (booking.getStatus() != BookingStatus.REQUESTED) {
-            throw new IllegalArgumentException("Only REQUESTED bookings can be assigned");
-        }
-
         booking.setTechnicianId(technicianId);
         booking.setStatus(BookingStatus.ASSIGNED);
         bookingRepository.save(booking);
 
-        // 🔔 NOTIFICATION → TECHNICIAN
         notificationClient.sendNotification(
                 CreateNotificationRequest.builder()
                         .userId(technicianId)
@@ -120,64 +115,34 @@ public class BookingService {
     }
 
     // ================= UPDATE STATUS =================
-    public BookingResponse updateStatus(String bookingId, String status) {
+    public BookingResponse updateStatus(String bookingId, String statusValue) {
 
         Booking booking = bookingRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
-        BookingStatus newStatus = BookingStatus.valueOf(status);
-
-        if (booking.getStatus() == BookingStatus.CANCELLED) {
-            throw new IllegalArgumentException("Cancelled booking cannot be updated");
-        }
-
+        BookingStatus newStatus = BookingStatus.valueOf(statusValue.toUpperCase());
         booking.setStatus(newStatus);
         bookingRepository.save(booking);
 
-        // ================= COMPLETED FLOW =================
         if (newStatus == BookingStatus.COMPLETED) {
 
-            billingClient.createInvoice(
-                    CreateInvoiceRequest.builder()
-                            .bookingId(booking.getBookingId())
-                            .customerId(booking.getCustomerId())
-                            .items(List.of(
-                                    InvoiceLineItem.builder()
-                                            .description(booking.getServiceName())
-                                            .unitPrice(499.0)
-                                            .quantity(1)
-                                            .build()
-                            ))
-                            .build()
-            );
+            log.info("Booking {} completed. Publishing event...", bookingId);
 
-            // 🔔 NOTIFICATION → CUSTOMER
-            notificationClient.sendNotification(
-                    CreateNotificationRequest.builder()
-                            .userId(booking.getCustomerId())
-                            .role("CUSTOMER")
-                            .title("Service Completed")
-                            .message("Your booking " + booking.getBookingId() + " is completed")
-                            .type("BOOKING_COMPLETED")
-                            .build()
-            );
+            BookingCompletedEvent event = BookingCompletedEvent.builder()
+                    .bookingId(booking.getBookingId())
+                    .customerId(booking.getCustomerId())
+                    .serviceName(booking.getServiceName())
+                    .build();
+
+            rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
+
+            log.info("BookingCompletedEvent sent for {}", bookingId);
         }
 
         return new BookingResponse(
                 booking.getBookingId(),
                 booking.getStatus().name()
         );
-    }
-
-    // ================= PAGINATION =================
-    public Page<BookingListResponse> getAllBookingsPaged(Pageable pageable) {
-        return bookingRepository.findAll(pageable)
-                .map(this::toListResponse);
-    }
-
-    public Page<BookingListResponse> getMyBookingsPaged(String customerId, Pageable pageable) {
-        return bookingRepository.findByCustomerId(customerId, pageable)
-                .map(this::toListResponse);
     }
 
     // ================= MAPPER =================

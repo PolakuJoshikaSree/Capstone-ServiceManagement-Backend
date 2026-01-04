@@ -6,14 +6,13 @@ import com.app.booking.dto.response.BookingResponse;
 import com.app.booking.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -32,10 +31,8 @@ public class BookingController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String customerId = authentication.getName();
-
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(bookingService.createBooking(request, customerId));
+                .body(bookingService.createBooking(request, authentication.getName()));
     }
 
     // ================= MANAGER / ADMIN =================
@@ -51,7 +48,7 @@ public class BookingController {
     @GetMapping("/my")
     public ResponseEntity<List<BookingListResponse>> myBookings(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
-            throw new SecurityException("Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(
                 bookingService.getMyBookings(auth.getName())
@@ -62,46 +59,64 @@ public class BookingController {
     @GetMapping("/technician/my")
     public ResponseEntity<List<BookingListResponse>> myAssignedBookings(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
-            throw new SecurityException("Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(
                 bookingService.getAssignedBookingsForTechnician(auth.getName())
         );
     }
 
+    // ================= UPDATE STATUS (FIXED) =================
     @PutMapping("/{bookingId}/status")
-    public ResponseEntity<BookingResponse> updateStatus(
+    public ResponseEntity<?> updateStatus(
             Authentication auth,
             @PathVariable String bookingId,
-            @RequestBody java.util.Map<String, String> body
+            @RequestBody Map<String, String> body
     ) {
         if (auth == null || !auth.isAuthenticated()) {
-            throw new SecurityException("Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Unauthorized");
         }
 
         String status = body.get("status");
-        if (status == null) {
-            throw new IllegalArgumentException("Status is required");
+        if (status == null || status.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body("Status is required");
         }
 
-        return ResponseEntity.ok(
-                bookingService.updateStatus(bookingId, status)
-        );
+        try {
+            BookingResponse response =
+                    bookingService.updateStatus(bookingId, status);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
     }
 
     // ================= MANAGER: ASSIGN TECHNICIAN =================
     @PutMapping("/{bookingId}/assign/{technicianId}")
-    public ResponseEntity<BookingResponse> assignTechnician(
+    public ResponseEntity<?> assignTechnician(
             Authentication auth,
             @PathVariable String bookingId,
             @PathVariable String technicianId
     ) {
         if (auth == null || !auth.isAuthenticated()) {
-            throw new SecurityException("Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Unauthorized");
         }
 
-        return ResponseEntity.ok(
-                bookingService.assignTechnician(bookingId, technicianId)
-        );
+        try {
+            return ResponseEntity.ok(
+                    bookingService.assignTechnician(bookingId, technicianId)
+            );
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }

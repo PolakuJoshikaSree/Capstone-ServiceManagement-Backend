@@ -3,6 +3,12 @@ package com.app.auth.controller;
 import com.app.auth.dto.*;
 import com.app.auth.payload.ApiResponse;
 import com.app.auth.service.UserService;
+import org.springframework.security.core.Authentication;
+import java.util.stream.Collectors;
+
+
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -90,4 +96,18 @@ public class UserController {
         api.setData(data);
         return ResponseEntity.ok(api);
     }
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<UserProfileResponseDTO>>> getAllUsers(
+            Authentication authentication) {
+
+        String roles = authentication.getAuthorities()
+                .stream()
+                .map(a -> a.getAuthority())
+                .collect(Collectors.joining(","));
+
+        requireRole(roles, "ROLE_ADMIN");
+        return ok("Users fetched", userService.getAllUsers());
+    }
+
+
 }
