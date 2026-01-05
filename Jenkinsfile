@@ -36,7 +36,7 @@ pipeline {
                         'billing-service',
                         'config-server',
                         'notification-service',
-                        'service-catalog-service',  
+                        'Service-catalog', 
                         'service-registry'
                     ]
 
@@ -64,7 +64,7 @@ pipeline {
                         'auth-service',
                         'booking-service',
                         'billing-service',
-                        'service-catalog-service'   // 
+                        'Service-catalog'  
                     ]
 
                     for (service in testServices) {
