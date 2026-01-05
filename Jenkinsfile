@@ -28,39 +28,59 @@ pipeline {
 
         stage('Build All Services') {
             steps {
-                sh '''
-                set -e
-                SERVICES="api-gateway auth-service booking-service billing-service config-server notification-service service-catalog service-registry"
+                script {
+                    def services = [
+                        'api-gateway',
+                        'auth-service',
+                        'booking-service',
+                        'billing-service',
+                        'config-server',
+                        'notification-service',
+                        'service-catalog-service',  
+                        'service-registry'
+                    ]
 
-                for service in $SERVICES
-                do
-                  echo "=============================="
-                  echo " Building $service"
-                  echo "=============================="
-                  cd $service
-                  mvn clean package -DskipTests
-                  cd ..
-                done
-                '''
+                    for (service in services) {
+                        if (!fileExists(service)) {
+                            error " Folder not found: ${service}"
+                        }
+
+                        echo "=============================="
+                        echo " Building ${service}"
+                        echo "=============================="
+
+                        dir(service) {
+                            sh 'mvn clean package -DskipTests'
+                        }
+                    }
+                }
             }
         }
 
         stage('Run Tests & Coverage') {
             steps {
-                sh '''
-                set -e
-                TEST_SERVICES="auth-service booking-service billing-service service-catalog"
+                script {
+                    def testServices = [
+                        'auth-service',
+                        'booking-service',
+                        'billing-service',
+                        'service-catalog-service'   // 
+                    ]
 
-                for service in $TEST_SERVICES
-                do
-                  echo "=============================="
-                  echo " Testing $service"
-                  echo "=============================="
-                  cd $service
-                  mvn test
-                  cd ..
-                done
-                '''
+                    for (service in testServices) {
+                        if (!fileExists(service)) {
+                            error " Folder not found: ${service}"
+                        }
+
+                        echo "=============================="
+                        echo " Testing ${service}"
+                        echo "=============================="
+
+                        dir(service) {
+                            sh 'mvn test'
+                        }
+                    }
+                }
             }
         }
 
