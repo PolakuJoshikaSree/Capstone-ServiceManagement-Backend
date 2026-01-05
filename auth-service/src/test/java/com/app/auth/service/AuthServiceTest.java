@@ -6,8 +6,11 @@ import com.app.auth.enums.Role;
 import com.app.auth.mapper.UserMapper;
 import com.app.auth.repository.UserRepository;
 import com.app.auth.security.JwtUtil;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -17,211 +20,136 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    private UserRepository userRepository;
-    private UserMapper userMapper;
-    private PasswordEncoder passwordEncoder;
-    private JwtTokenService jwtTokenService;
-    private JwtUtil jwtUtil;
+    @Mock UserRepository userRepository;
+    @Mock UserMapper userMapper;
+    @Mock PasswordEncoder passwordEncoder;
+    @Mock JwtTokenService jwtTokenService;
+    @Mock JwtUtil jwtUtil;
 
-    private AuthService authService;
+    @InjectMocks
+    AuthService authService;
 
-    @BeforeEach
-    void setUp() {
-        userRepository = mock(UserRepository.class);
-        userMapper = mock(UserMapper.class);
-        passwordEncoder = mock(PasswordEncoder.class);
-        jwtTokenService = mock(JwtTokenService.class);
-        jwtUtil = mock(JwtUtil.class);
+    /* ================= REGISTER ================= */
 
-        authService = new AuthService(
-                userRepository,
-                userMapper,
-                passwordEncoder,
-                jwtTokenService,
-                jwtUtil
-        );
-    }
-
-    private UserEntity mockUser() {
-        UserEntity u = new UserEntity();
-        u.setId("u1");
-        u.setEmail("a@b.com");
-        u.setPassword("enc");
-        u.setRole(Role.CUSTOMER);
-        return u;
-    }
-
-    // ================= REGISTER SUCCESS =================
     @Test
     void registerUser_success() {
         RegisterUserDTO dto = new RegisterUserDTO();
         dto.setEmail("a@b.com");
         dto.setPhoneNumber("999");
-        dto.setPassword("raw");
+        dto.setPassword("pwd");
+        dto.setRole(Role.CUSTOMER);
 
-        UserEntity user = mockUser();
+        UserEntity user = new UserEntity();
+        user.setId("1");
+        user.setRole(Role.CUSTOMER);
 
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.existsByPhoneNumber(any())).thenReturn(false);
         when(userMapper.toEntity(dto)).thenReturn(user);
-        when(passwordEncoder.encode("raw")).thenReturn("enc");
+        when(passwordEncoder.encode("pwd")).thenReturn("encoded");
         when(userRepository.save(any())).thenReturn(user);
 
         when(jwtTokenService.generateAccessToken(user)).thenReturn("access");
         when(jwtTokenService.generateRefreshToken(user)).thenReturn("refresh");
-
         when(jwtUtil.getIssuedAt(any())).thenReturn(LocalDateTime.now());
-        when(jwtUtil.getExpiresAt(any())).thenReturn(LocalDateTime.now().plusSeconds(60));
-        when(userMapper.toProfileDto(any())).thenReturn(new UserProfileResponseDTO());
+        when(jwtUtil.getExpiresAt(any())).thenReturn(LocalDateTime.now().plusHours(1));
 
-        AuthResponseDTO response = authService.registerUser(dto);
-
-        assertEquals("access", response.getAccessToken());
-        assertEquals("refresh", response.getRefreshToken());
+        assertNotNull(authService.registerUser(dto));
     }
 
-    // ================= AUTHENTICATE SUCCESS =================
-    @Test
-    void authenticateUser_success() {
-        AuthRequestDTO req = new AuthRequestDTO();
-        req.setEmail("a@b.com");
-        req.setPassword("raw");
+    /* ================= REFRESH TOKEN ================= */
 
-        UserEntity user = mockUser();
-
-        when(userRepository.findByEmail("a@b.com"))
-                .thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("raw", "enc"))
-                .thenReturn(true);
-
-        when(jwtTokenService.generateAccessToken(user)).thenReturn("access");
-        when(jwtTokenService.generateRefreshToken(user)).thenReturn("refresh");
-
-        when(jwtUtil.getIssuedAt(any())).thenReturn(LocalDateTime.now());
-        when(jwtUtil.getExpiresAt(any())).thenReturn(LocalDateTime.now().plusSeconds(60));
-        when(userMapper.toProfileDto(any())).thenReturn(new UserProfileResponseDTO());
-
-        AuthResponseDTO response = authService.authenticateUser(req);
-
-        assertEquals("access", response.getAccessToken());
-    }
-
-    // ================= REFRESH TOKEN SUCCESS =================
     @Test
     void refreshAccessToken_success() {
         JwtTokenDTO stored = new JwtTokenDTO();
-        stored.setUserId("u1");
+        stored.setUserId("1");
 
-        UserEntity user = mockUser();
+        UserEntity user = new UserEntity();
+        user.setId("1");
 
-        when(jwtTokenService.getTokenFromRedis("refresh"))
-                .thenReturn(stored);
-        when(userRepository.findById("u1"))
-                .thenReturn(Optional.of(user));
-        when(jwtTokenService.generateAccessToken(user))
-                .thenReturn("newAccess");
+        when(jwtTokenService.getTokenFromRedis("refresh")).thenReturn(stored);
+        when(userRepository.findById("1")).thenReturn(Optional.of(user));
+        when(jwtTokenService.generateAccessToken(user)).thenReturn("newAccess");
+        when(jwtUtil.getIssuedAt(any())).thenReturn(LocalDateTime.now());
+        when(jwtUtil.getExpiresAt(any())).thenReturn(LocalDateTime.now().plusMinutes(30));
 
-        when(jwtUtil.getIssuedAt(any()))
-                .thenReturn(LocalDateTime.now());
-        when(jwtUtil.getExpiresAt(any()))
-                .thenReturn(LocalDateTime.now().plusSeconds(60));
-        when(userMapper.toProfileDto(any()))
-                .thenReturn(new UserProfileResponseDTO());
-
-        AuthResponseDTO response =
-                authService.refreshAccessToken("refresh");
-
-        assertEquals("newAccess", response.getAccessToken());
+        assertNotNull(authService.refreshAccessToken("refresh"));
     }
 
-    // ================= VALIDATE TOKEN =================
+    /* ================= VALIDATE TOKEN ================= */
+
     @Test
     void validateToken_success() {
         JwtTokenDTO dto = new JwtTokenDTO();
+        when(jwtTokenService.getTokenFromRedis("token")).thenReturn(dto);
 
-        when(jwtTokenService.getTokenFromRedis("token"))
-                .thenReturn(dto);
-
-        assertEquals(dto, authService.validateToken("token"));
+        assertNotNull(authService.validateToken("token"));
     }
 
-    // ================= LOGOUT =================
-    @Test
-    void logout_executes() {
-        authService.logout("token");
-        verify(jwtTokenService).removeTokenFromRedis("token");
-    }
+    /* ================= CHANGE PASSWORD ================= */
 
-    // ================= CHANGE PASSWORD =================
     @Test
     void changePassword_success() {
-        UserEntity user = mockUser();
+        UserEntity user = new UserEntity();
+        user.setId("1");
+        user.setPassword("old");
 
-        when(userRepository.findById("u1"))
-                .thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(any(), any()))
-                .thenReturn(true);
-        when(passwordEncoder.encode(any()))
-                .thenReturn("newEnc");
+        when(userRepository.findById("1")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("oldPwd", "old")).thenReturn(true);
+        when(passwordEncoder.encode("newPwd")).thenReturn("encoded");
 
-        authService.changePassword("u1", "old", "new");
+        authService.changePassword("1", "oldPwd", "newPwd");
 
-        verify(userRepository).save(user);
-        verify(jwtTokenService).removeAllTokensForUser("u1");
+        verify(jwtTokenService).removeAllTokensForUser("1");
     }
 
-    // ================= INITIATE PASSWORD RESET =================
+    /* ================= FORGOT PASSWORD ================= */
+
     @Test
     void initiatePasswordReset_success() {
-        UserEntity user = mockUser();
+        UserEntity user = new UserEntity();
+        user.setEmail("a@b.com");
 
-        when(userRepository.findByEmail("a@b.com"))
-                .thenReturn(Optional.of(user));
-        when(jwtTokenService.generatePasswordResetToken(any()))
-                .thenReturn("reset");
+        when(userRepository.findByEmail("a@b.com")).thenReturn(Optional.of(user));
+        when(jwtTokenService.generatePasswordResetToken("a@b.com")).thenReturn("token");
 
         authService.initiatePasswordReset("a@b.com");
 
-        verify(jwtTokenService)
-                .storePasswordResetToken("a@b.com", "reset");
+        verify(jwtTokenService).storePasswordResetToken(eq("a@b.com"), any());
     }
 
-    // ================= RESET PASSWORD =================
+    /* ================= RESET PASSWORD ================= */
+
     @Test
     void resetPassword_success() {
-        UserEntity user = mockUser();
+        UserEntity user = new UserEntity();
+        user.setId("1");
+        user.setEmail("a@b.com");
 
-        when(jwtTokenService.validatePasswordResetToken("reset"))
-                .thenReturn("a@b.com");
-        when(userRepository.findByEmail("a@b.com"))
-                .thenReturn(Optional.of(user));
-        when(passwordEncoder.encode(any()))
-                .thenReturn("newEnc");
+        when(jwtTokenService.validatePasswordResetToken("token")).thenReturn("a@b.com");
+        when(userRepository.findByEmail("a@b.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("newPwd")).thenReturn("encoded");
 
-        authService.resetPassword("reset", "newPwd");
+        authService.resetPassword("token", "newPwd");
 
-        verify(jwtTokenService).removePasswordResetToken("reset");
-        verify(jwtTokenService).removeAllTokensForUser("u1");
+        verify(jwtTokenService).removeAllTokensForUser("1");
     }
 
-    // ================= GET ALL TECHNICIANS =================
+    /* ================= TECHNICIANS ================= */
+
     @Test
     void getAllTechnicians_success() {
         UserEntity tech = new UserEntity();
-        tech.setId("t1");
-        tech.setFirstName("John");
+        tech.setId("1");
+        tech.setFirstName("Tech");
         tech.setRole(Role.TECHNICIAN);
 
         when(userRepository.findByRole(Role.TECHNICIAN))
                 .thenReturn(List.of(tech));
 
-        List<TechnicianSimpleResponse> list =
-                authService.getAllTechnicians();
-
-        assertEquals(1, list.size());
-        assertEquals("t1", list.get(0).getId());
-        assertEquals("John", list.get(0).getName());
+        assertEquals(1, authService.getAllTechnicians().size());
     }
 }

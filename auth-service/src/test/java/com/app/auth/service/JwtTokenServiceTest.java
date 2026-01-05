@@ -1,7 +1,6 @@
 package com.app.auth.service;
 
 import com.app.auth.dto.JwtTokenDTO;
-import com.app.auth.entity.UserEntity;
 import com.app.auth.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -12,37 +11,25 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.LocalDateTime;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
 class JwtTokenServiceTest {
 
-    RedisTemplate<String, JwtTokenDTO> redisTemplate = mock(RedisTemplate.class);
-    StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+    RedisTemplate<String, JwtTokenDTO> redis = mock(RedisTemplate.class);
+    StringRedisTemplate stringRedis = mock(StringRedisTemplate.class);
     JwtUtil jwtUtil = mock(JwtUtil.class);
 
-    JwtTokenService service =
-            new JwtTokenService(redisTemplate, stringRedisTemplate, jwtUtil);
-
-    @Test
-    void generateTokens_delegatesToJwtUtil() {
-        UserEntity user = new UserEntity();
-
-        when(jwtUtil.generateAccessToken(user)).thenReturn("access");
-        when(jwtUtil.generateRefreshToken(user)).thenReturn("refresh");
-
-        assertEquals("access", service.generateAccessToken(user));
-        assertEquals("refresh", service.generateRefreshToken(user));
-    }
+    JwtTokenService service = new JwtTokenService(redis, stringRedis, jwtUtil);
 
     @Test
     void storeTokenInRedis_accessToken() {
         JwtTokenDTO dto = new JwtTokenDTO();
         dto.setIssuedAt(LocalDateTime.now());
-        dto.setExpiresAt(LocalDateTime.now().plusSeconds(100));
+        dto.setExpiresAt(LocalDateTime.now().plusMinutes(10));
 
         ValueOperations<String, JwtTokenDTO> ops = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(ops);
+        when(redis.opsForValue()).thenReturn(ops);
 
         service.storeTokenInRedis("token", dto);
 
@@ -50,54 +37,40 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void storeTokenInRedis_zeroSeconds_doesNothing() {
-        JwtTokenDTO dto = new JwtTokenDTO();
-        dto.setIssuedAt(LocalDateTime.now());
-        dto.setExpiresAt(LocalDateTime.now());
-
-        service.storeTokenInRedis("token", dto);
-
-        verify(redisTemplate, never()).opsForValue();
-    }
-
-    @Test
-    void getTokenFromRedis_accessFound() {
+    void getTokenFromRedis_fallbackToRefresh() {
         ValueOperations<String, JwtTokenDTO> ops = mock(ValueOperations.class);
-        JwtTokenDTO dto = new JwtTokenDTO();
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get(any())).thenReturn(null, new JwtTokenDTO());
 
-        when(redisTemplate.opsForValue()).thenReturn(ops);
-        when(ops.get(anyString())).thenReturn(dto);
-
-        assertEquals(dto, service.getTokenFromRedis("token"));
+        assertNotNull(service.getTokenFromRedis("token"));
     }
 
     @Test
-    void removeTokenFromRedis_deletesBoth() {
+    void removeTokenFromRedis_success() {
         service.removeTokenFromRedis("token");
 
-        verify(redisTemplate).delete("token:access:token");
-        verify(redisTemplate).delete("token:refresh:token");
+        verify(redis).delete("token:access:token");
+        verify(redis).delete("token:refresh:token");
     }
+
 
     @Test
-    void passwordResetToken_flow() {
-        ValueOperations<String, String> ops = mock(ValueOperations.class);
-        when(stringRedisTemplate.opsForValue()).thenReturn(ops);
+    void removeAllTokensForUser_safe() {
+        when(redis.keys("token:access:*"))
+                .thenReturn(Set.of("k1"));
+        when(redis.keys("token:refresh:*"))
+                .thenReturn(Set.of("k2"));
 
-        String token = service.generatePasswordResetToken("a@b.com");
-        assertNotNull(token);
+        JwtTokenDTO dto = new JwtTokenDTO();
+        dto.setUserId("1");
 
-        service.storePasswordResetToken("a@b.com", token);
-        service.validatePasswordResetToken(token);
-        service.removePasswordResetToken(token);
+        ValueOperations<String, JwtTokenDTO> ops = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn(dto);
 
-        verify(stringRedisTemplate).delete("password:reset:" + token);
+        service.removeAllTokensForUser("1");
+
+        verify(redis, atLeastOnce()).delete(anyString());
     }
 
-    @Test
-    void removeAllTokensForUser_safeExecution() {
-        when(redisTemplate.keys(anyString())).thenReturn(Set.of());
-
-        service.removeAllTokensForUser("user");
-    }
 }

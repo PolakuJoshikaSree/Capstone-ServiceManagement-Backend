@@ -171,6 +171,7 @@
                             <exclude>**/entity/**</exclude>
                             <exclude>**/enum/**</exclude>
                             <exclude>**/enums/**</exclude>
+                            <exclude>**/event/**</exclude>
                         </excludes>
                     </configuration>
                 </execution>

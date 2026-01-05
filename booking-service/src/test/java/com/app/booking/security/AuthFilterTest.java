@@ -2,95 +2,57 @@ package com.app.booking.security;
 
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.mockito.Mockito;
+import org.springframework.mock.web.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
 class AuthFilterTest {
 
-    @Mock
-    private JwtUtil jwtUtil;
-
-    @InjectMocks
-    private AuthFilter authFilter;
-
-    @Mock
-    private FilterChain filterChain;
-
-    @BeforeEach
-    void clearContext() {
-        SecurityContextHolder.clearContext();
-    }
-
-    // -------- NO AUTH HEADER --------
-    @Test
-    void noAuthorizationHeader_allowsRequest() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        authFilter.doFilter(request, response, filterChain);
-
-        verify(filterChain).doFilter(request, response);
-    }
-
-    // -------- NOT BEARER TOKEN --------
-    @Test
-    void invalidAuthorizationHeader_allowsRequest() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("Authorization", "Basic abc123");
-
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        authFilter.doFilter(request, response, filterChain);
-
-        verify(filterChain).doFilter(request, response);
-    }
-
-    // -------- VALID TOKEN --------
     @Test
     void validToken_setsAuthentication() throws Exception {
+
+        JwtUtil jwtUtil = Mockito.mock(JwtUtil.class);
+        Claims claims = Mockito.mock(Claims.class);
+
+        Mockito.when(claims.getSubject()).thenReturn("user1");
+        Mockito.when(claims.get("role", String.class)).thenReturn("CUSTOMER");
+        Mockito.when(jwtUtil.validateToken("token")).thenReturn(claims);
+
+        AuthFilter filter = new AuthFilter(jwtUtil);
+
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("Authorization", "Bearer validtoken");
+        request.addHeader("Authorization", "Bearer token");
 
         MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
 
-        Claims claims = mock(Claims.class);
-        when(jwtUtil.validateToken("validtoken")).thenReturn(claims);
-        when(claims.getSubject()).thenReturn("user1");
-        when(claims.get("role", String.class)).thenReturn("CUSTOMER");
+        filter.doFilterInternal(request, response, chain);
 
-        authFilter.doFilter(request, response, filterChain);
-
-        verify(filterChain).doFilter(request, response);
-        assertEquals("user1",
-                SecurityContextHolder.getContext()
-                        .getAuthentication().getName());
+        assertNotNull(
+                org.springframework.security.core.context.SecurityContextHolder
+                        .getContext().getAuthentication()
+        );
     }
 
-    // -------- INVALID TOKEN --------
     @Test
     void invalidToken_returns401() throws Exception {
+
+        JwtUtil jwtUtil = Mockito.mock(JwtUtil.class);
+        Mockito.when(jwtUtil.validateToken(Mockito.any()))
+                .thenThrow(new RuntimeException());
+
+        AuthFilter filter = new AuthFilter(jwtUtil);
+
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("Authorization", "Bearer badtoken");
+        request.addHeader("Authorization", "Bearer bad");
 
         MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
 
-        when(jwtUtil.validateToken("badtoken"))
-                .thenThrow(new RuntimeException("Invalid"));
-
-        authFilter.doFilter(request, response, filterChain);
+        filter.doFilterInternal(request, response, chain);
 
         assertEquals(401, response.getStatus());
-        verify(filterChain, never()).doFilter(any(), any());
     }
 }

@@ -1,70 +1,112 @@
 package com.app.booking.service;
 
-import com.app.booking.client.BillingClient;
 import com.app.booking.client.NotificationClient;
-import com.app.booking.dto.CreateNotificationRequest;
-import com.app.booking.dto.billing.CreateInvoiceRequest;
 import com.app.booking.dto.request.CreateBookingRequest;
-import com.app.booking.dto.response.BookingResponse;
+import com.app.booking.event.BookingCompletedEvent;
 import com.app.booking.exception.BookingNotFoundException;
 import com.app.booking.model.Booking;
 import com.app.booking.model.BookingStatus;
 import com.app.booking.repository.BookingRepository;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class BookingServiceTest {
 
-    @Mock
-    private BookingRepository bookingRepository;
+    private final BookingRepository bookingRepository =
+            Mockito.mock(BookingRepository.class);
 
-    @Mock
-    private BillingClient billingClient;
+    private final NotificationClient notificationClient =
+            Mockito.mock(NotificationClient.class);
 
-    @Mock
-    private NotificationClient notificationClient;
+    private final RabbitTemplate rabbitTemplate =
+            Mockito.mock(RabbitTemplate.class);
 
-    @InjectMocks
-    private BookingService bookingService;
+    private final BookingService service =
+            new BookingService(
+                    bookingRepository,
+                    notificationClient,
+                    rabbitTemplate
+            );
 
-    // ================= CREATE BOOKING =================
-
+    // ---------- CREATE BOOKING ----------
     @Test
     void createBooking_success() {
 
         CreateBookingRequest request = CreateBookingRequest.builder()
                 .serviceName("Plumbing")
-                .categoryName("Repair")
+                .categoryName("Home")
                 .scheduledDate(LocalDate.now())
-                .timeSlot("10:00-12:00")
-                .address("Hyderabad")
+                .timeSlot("10:00 - 12:00")
+                .address("Addr")
                 .issueDescription("Leak")
                 .paymentMode("CASH")
                 .build();
 
-        BookingResponse response =
-                bookingService.createBooking(request, "CUST1");
+        Mockito.when(bookingRepository.save(Mockito.any()))
+                .thenAnswer(i -> i.getArgument(0));
+
+        var response = service.createBooking(request, "CUST1");
 
         assertNotNull(response.getBookingId());
         assertEquals("REQUESTED", response.getStatus());
 
-        verify(bookingRepository).save(any(Booking.class));
-        verify(notificationClient).sendNotification(any(CreateNotificationRequest.class));
+        Mockito.verify(notificationClient).sendNotification(Mockito.any());
     }
 
-    // ================= ASSIGN TECHNICIAN =================
+    // ---------- READ ----------
+    @Test
+    void getAllBookings_returnsList() {
 
+        Mockito.when(bookingRepository.findAll())
+                .thenReturn(List.of(
+                        Booking.builder()
+                                .bookingId("BK1")
+                                .status(BookingStatus.REQUESTED)
+                                .build()
+                ));
+
+        assertEquals(1, service.getAllBookings().size());
+    }
+
+    @Test
+    void getMyBookings_returnsList() {
+
+        Mockito.when(bookingRepository.findByCustomerId("C1"))
+                .thenReturn(List.of(
+                        Booking.builder()
+                                .bookingId("BK1")
+                                .customerId("C1")
+                                .status(BookingStatus.REQUESTED)
+                                .build()
+                ));
+
+        assertEquals(1, service.getMyBookings("C1").size());
+    }
+
+    @Test
+    void getAssignedBookingsForTechnician_returnsList() {
+
+        Mockito.when(bookingRepository.findByTechnicianId("T1"))
+                .thenReturn(List.of(
+                        Booking.builder()
+                                .bookingId("BK1")
+                                .technicianId("T1")
+                                .status(BookingStatus.ASSIGNED)
+                                .build()
+                ));
+
+        assertEquals(1, service.getAssignedBookingsForTechnician("T1").size());
+    }
+
+    // ---------- ASSIGN TECHNICIAN ----------
     @Test
     void assignTechnician_success() {
 
@@ -73,98 +115,90 @@ class BookingServiceTest {
                 .status(BookingStatus.REQUESTED)
                 .build();
 
-        when(bookingRepository.findByBookingId("BK1"))
+        Mockito.when(bookingRepository.findByBookingId("BK1"))
                 .thenReturn(Optional.of(booking));
 
-        BookingResponse response =
-                bookingService.assignTechnician("BK1", "TECH1");
+        var response = service.assignTechnician("BK1", "TECH1");
 
         assertEquals("ASSIGNED", response.getStatus());
-        verify(bookingRepository).save(booking);
-        verify(notificationClient).sendNotification(any(CreateNotificationRequest.class));
+        Mockito.verify(notificationClient).sendNotification(Mockito.any());
     }
 
     @Test
-    void assignTechnician_invalidStatus_shouldThrow() {
+    void assignTechnician_notFound() {
+
+        Mockito.when(bookingRepository.findByBookingId("X"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                BookingNotFoundException.class,
+                () -> service.assignTechnician("X", "T1")
+        );
+    }
+
+    // ---------- UPDATE STATUS (NON-COMPLETED) ----------
+    @Test
+    void updateStatus_assigned_only() {
 
         Booking booking = Booking.builder()
                 .bookingId("BK1")
-                .status(BookingStatus.CANCELLED)
+                .status(BookingStatus.REQUESTED)
                 .build();
 
-        when(bookingRepository.findByBookingId("BK1"))
+        Mockito.when(bookingRepository.findByBookingId("BK1"))
                 .thenReturn(Optional.of(booking));
 
-        assertThrows(IllegalArgumentException.class,
-                () -> bookingService.assignTechnician("BK1", "TECH1"));
+        var response = service.updateStatus("BK1", "ASSIGNED");
+
+        assertEquals("ASSIGNED", response.getStatus());
+
+        Mockito.verify(rabbitTemplate, Mockito.never())
+        .convertAndSend(
+            Mockito.anyString(),
+            Mockito.anyString(),
+            Mockito.any(Object.class)
+        );
+
     }
 
-    // ================= UPDATE STATUS =================
-
+    // ---------- UPDATE STATUS (COMPLETED) ----------
     @Test
-    void updateStatus_inProgress_shouldNotCallBilling() {
+    void updateStatus_completed_triggersEventAndNotification() {
 
         Booking booking = Booking.builder()
                 .bookingId("BK1")
-                .status(BookingStatus.ASSIGNED)
-                .build();
-
-        when(bookingRepository.findByBookingId("BK1"))
-                .thenReturn(Optional.of(booking));
-
-        BookingResponse response =
-                bookingService.updateStatus("BK1", "IN_PROGRESS");
-
-        assertEquals("IN_PROGRESS", response.getStatus());
-        verify(billingClient, never()).createInvoice(any());
-    }
-
-    @Test
-    void updateStatus_completed_shouldCallBilling() {
-
-        Booking booking = Booking.builder()
-                .bookingId("BK1")
-                .customerId("CUST1")
-                .serviceName("Plumbing")
+                .customerId("C1")
+                .technicianId("T1")
+                .serviceName("AC")
                 .status(BookingStatus.IN_PROGRESS)
-                .createdAt(LocalDateTime.now())
                 .build();
 
-        when(bookingRepository.findByBookingId("BK1"))
+        Mockito.when(bookingRepository.findByBookingId("BK1"))
                 .thenReturn(Optional.of(booking));
 
-        BookingResponse response =
-                bookingService.updateStatus("BK1", "COMPLETED");
+        var response = service.updateStatus("BK1", "COMPLETED");
 
         assertEquals("COMPLETED", response.getStatus());
-        verify(billingClient).createInvoice(any(CreateInvoiceRequest.class));
-        verify(notificationClient).sendNotification(any(CreateNotificationRequest.class));
-    }
 
-    // ================= EXCEPTIONS =================
+        ArgumentCaptor<BookingCompletedEvent> captor =
+                ArgumentCaptor.forClass(BookingCompletedEvent.class);
+
+        Mockito.verify(rabbitTemplate)
+                .convertAndSend(Mockito.any(), Mockito.any(), captor.capture());
+
+        Mockito.verify(notificationClient)
+                .sendNotification(Mockito.any());
+    }
 
     @Test
     void updateStatus_bookingNotFound() {
 
-        when(bookingRepository.findByBookingId("BAD"))
+        Mockito.when(bookingRepository.findByBookingId("X"))
                 .thenReturn(Optional.empty());
 
-        assertThrows(BookingNotFoundException.class,
-                () -> bookingService.updateStatus("BAD", "COMPLETED"));
-    }
-
-    @Test
-    void updateStatus_invalidStatus_shouldThrow() {
-
-        Booking booking = Booking.builder()
-                .bookingId("BK1")
-                .status(BookingStatus.ASSIGNED)
-                .build();
-
-        when(bookingRepository.findByBookingId("BK1"))
-                .thenReturn(Optional.of(booking));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> bookingService.updateStatus("BK1", "WRONG_STATUS"));
+        assertThrows(
+                BookingNotFoundException.class,
+                () -> service.updateStatus("X", "COMPLETED")
+        );
     }
 }

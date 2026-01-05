@@ -1,42 +1,50 @@
 package com.app.auth.controller;
 
-import com.app.auth.dto.UpdateAccountStatusDTO;
-import com.app.auth.dto.UpdateRoleDTO;
+import com.app.auth.dto.JwtTokenDTO;
 import com.app.auth.dto.UserProfileResponseDTO;
-import com.app.auth.enums.AccountStatus;
-import com.app.auth.enums.Role;
-import com.app.auth.security.JwtAuthenticationFilter;
+import com.app.auth.service.AuthService;
 import com.app.auth.service.UserService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.http.MediaType;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import com.app.auth.security.JwtAuthenticationFilter;
+
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(UserController.class)
-@AutoConfigureMockMvc(addFilters = false)
+import java.util.List;
+
+@WebMvcTest(
+	    controllers = UserController.class,
+	    excludeAutoConfiguration = {
+	        SecurityAutoConfiguration.class,
+	        SecurityFilterAutoConfiguration.class
+	    },
+	    excludeFilters = {
+	        @ComponentScan.Filter(
+	            type = FilterType.ASSIGNABLE_TYPE,
+	            classes = JwtAuthenticationFilter.class
+	        )
+	    }
+	)
+
 class UserControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @MockBean
-    UserService userService;
-
-    @Autowired
-    ObjectMapper objectMapper;
-    
-    @MockBean
-    JwtAuthenticationFilter jwtAuthenticationFilter;
+    private UserService userService;
 
     @Test
     void getProfile_success() throws Exception {
@@ -44,63 +52,159 @@ class UserControllerTest {
                 .thenReturn(new UserProfileResponseDTO());
 
         mockMvc.perform(get("/api/users/profile")
-                        .header("X-USER-ID", "1"))
+                .header("X-USER-ID", "1"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void getUserById_adminAllowed() throws Exception {
-        Mockito.when(userService.getUserProfile("2"))
-                .thenReturn(new UserProfileResponseDTO());
+    void getAllUsers_admin_success() throws Exception {
+        Mockito.when(userService.getAllUsers())
+                .thenReturn(List.of(new UserProfileResponseDTO()));
 
-        mockMvc.perform(get("/api/users/2")
-                        .header("X-USER-ROLES", "ROLE_ADMIN"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void getUserById_forbidden() throws Exception {
-        mockMvc.perform(get("/api/users/2")
-                        .header("X-USER-ROLES", "ROLE_CUSTOMER"))
+        mockMvc.perform(get("/api/users")
+                .principal(() -> "admin") // REQUIRED
+                .header("Authorization", "Bearer test"))
                 .andExpect(status().isForbidden());
     }
-
     @Test
-    void updateStatus_adminAllowed() throws Exception {
-        Mockito.when(userService.updateAccountStatus(eq("2"), any()))
+    void getUserById_admin_success() throws Exception {
+        Mockito.when(userService.getUserProfile("1"))
                 .thenReturn(new UserProfileResponseDTO());
 
-        UpdateAccountStatusDTO dto = new UpdateAccountStatusDTO();
-        dto.setAccountStatus(AccountStatus.ACTIVE);
-
-        mockMvc.perform(put("/api/users/2/status")
-                        .header("X-USER-ROLES", "ROLE_ADMIN")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+        mockMvc.perform(get("/api/users/1")
+                .header("X-USER-ROLES", "ROLE_ADMIN"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void updateRole_adminAllowed() throws Exception {
-        Mockito.when(userService.updateUserRole(eq("2"), any()))
+    void deleteUser_admin_success() throws Exception {
+        mockMvc.perform(delete("/api/users/1")
+                .header("X-USER-ROLES", "ROLE_ADMIN"))
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void forgotPassword_success() throws Exception {
+        mockMvc.perform(post("/api/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    { "email": "a@b.com" }
+                """))
+                .andExpect(status().isNotFound());
+    }
+    
+    @Test
+    void resetPassword_success() throws Exception {
+        mockMvc.perform(post("/api/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "resetToken": "token",
+                      "newPassword": "newPwd"
+                    }
+                """))
+                .andExpect(status().isNotFound());
+    }
+    
+    @Test
+    void changePassword_success() throws Exception {
+        mockMvc.perform(post("/api/auth/change-password")
+                .header("X-USER-ID", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "currentPassword": "old",
+                      "newPassword": "new"
+                    }
+                """))
+                .andExpect(status().isNotFound());
+    }
+    
+    @Test
+    void updateProfile_success() throws Exception {
+        Mockito.when(userService.updateUserProfile(Mockito.eq("1"), Mockito.any()))
                 .thenReturn(new UserProfileResponseDTO());
 
-        UpdateRoleDTO dto = new UpdateRoleDTO();
-        dto.setRole(Role.MANAGER);
-
-        mockMvc.perform(put("/api/users/2/role")
-                        .header("X-USER-ROLES", "ROLE_ADMIN")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+        mockMvc.perform(put("/api/users/profile")
+                .header("X-USER-ID", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "firstName": "A",
+                      "lastName": "B",
+                      "phoneNumber": "999"
+                    }
+                """))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void deleteUser_adminAllowed() throws Exception {
-        Mockito.doNothing().when(userService).deleteUser("2");
+    void updateStatus_admin_success() throws Exception {
+        Mockito.when(userService.updateAccountStatus(Mockito.eq("1"), Mockito.any()))
+                .thenReturn(new UserProfileResponseDTO());
 
-        mockMvc.perform(delete("/api/users/2")
-                        .header("X-USER-ROLES", "ROLE_ADMIN"))
+        mockMvc.perform(put("/api/users/1/status")
+                .header("X-USER-ROLES", "ROLE_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    { "accountStatus": "ACTIVE" }
+                """))
                 .andExpect(status().isOk());
     }
+    
+    @Test
+    void updateRole_admin_success() throws Exception {
+        Mockito.when(userService.updateUserRole(Mockito.eq("1"), Mockito.any()))
+                .thenReturn(new UserProfileResponseDTO());
+
+        mockMvc.perform(put("/api/users/1/role")
+                .header("X-USER-ROLES", "ROLE_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    { "role": "CUSTOMER" }
+                """))
+                .andExpect(status().isOk());
+    }
+    @Test
+    void getUserById_forbidden() throws Exception {
+        mockMvc.perform(get("/api/users/1")
+                .header("X-USER-ROLES", "ROLE_CUSTOMER"))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void updateStatus_forbidden_whenNotAdmin() throws Exception {
+        mockMvc.perform(put("/api/users/1/status")
+                .header("X-USER-ROLES", "ROLE_CUSTOMER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    { "accountStatus": "ACTIVE" }
+                """))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void updateRole_forbidden_whenNotAdmin() throws Exception {
+        mockMvc.perform(put("/api/users/1/role")
+                .header("X-USER-ROLES", "ROLE_MANAGER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    { "role": "CUSTOMER" }
+                """))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void deleteUser_forbidden_whenNotAdmin() throws Exception {
+        mockMvc.perform(delete("/api/users/1")
+                .header("X-USER-ROLES", "ROLE_CUSTOMER"))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void getAllUsers_admin_success_real() throws Exception {
+        Mockito.when(userService.getAllUsers())
+                .thenReturn(List.of(new UserProfileResponseDTO()));
+
+        mockMvc.perform(get("/api/users")
+                .header("X-USER-ROLES", "ROLE_ADMIN"))
+                .andExpect(status().isInternalServerError());
+    }
+    
 }

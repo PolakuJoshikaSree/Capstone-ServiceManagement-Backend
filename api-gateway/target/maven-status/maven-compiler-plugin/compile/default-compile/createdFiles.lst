@@ -1,7 +1,5 @@
-com/app/gateway/security/JwtAuthFilter.class
-com/app/gateway/config/CorsConfig.class
 com/app/gateway/exception/GlobalExceptionHandler.class
-com/app/gateway/security/JwtUtil.class
-com/app/gateway/security/GatewaySecurityConfig.class
 com/app/gateway/ApiGatewayApplication.class
+com/app/gateway/config/CorsConfig.class
 com/app/gateway/payload/ApiResponse.class
+com/app/gateway/config/SecurityConfig.class

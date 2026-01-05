@@ -1,7 +1,5 @@
-/Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/security/JwtUtil.java
 /Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/config/CorsConfig.java
 /Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/exception/GlobalExceptionHandler.java
 /Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/ApiGatewayApplication.java
+/Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/config/SecurityConfig.java
 /Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/payload/ApiResponse.java
-/Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/security/JwtAuthFilter.java
-/Users/polakujoshikasree/Documents/Capstone_Service-Management-System/api-gateway/src/main/java/com/app/gateway/security/GatewaySecurityConfig.java

@@ -5,62 +5,70 @@ import com.app.billing.model.Invoice;
 import com.app.billing.service.BillingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.*;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import java.util.List;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(BillingController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class BillingControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    MockMvc mockMvc;
 
     @MockBean
-    private BillingService billingService;
+    BillingService billingService;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    ObjectMapper objectMapper;
 
-    // =========================
-    // POST /api/billing/invoices
-    // =========================
     @Test
-    void createInvoice_returns201() throws Exception {
+    void createInvoice_success() throws Exception {
 
-        doNothing().when(billingService).createInvoice(any(CreateInvoiceRequest.class));
-
-        CreateInvoiceRequest request = CreateInvoiceRequest.builder()
-                .bookingId("B1")
-                .customerId("C1")
-                .items(null)
-                .build();
+        CreateInvoiceRequest request =
+                CreateInvoiceRequest.builder().bookingId("BK1").build();
 
         mockMvc.perform(post("/api/billing/invoices")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
     }
 
-    // =========================
-    // PUT /api/billing/invoices/{bookingId}/pay
-    // =========================
     @Test
-    void markPaid_returns200() throws Exception {
+    void markPaid_success() throws Exception {
 
-        when(billingService.markPaid(eq("B1")))
+        Mockito.when(billingService.markPaid("BK1"))
                 .thenReturn(new Invoice());
 
-        mockMvc.perform(put("/api/billing/invoices/B1/pay"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/billing/invoices/BK1/pay"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void getAllInvoices() throws Exception {
+
+        Mockito.when(billingService.getAllInvoices())
+                .thenReturn(List.of(new Invoice()));
+
+        mockMvc.perform(get("/api/billing/invoices"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void getInvoicesByCustomer() throws Exception {
+
+        Mockito.when(billingService.getInvoicesByCustomer("C1"))
+                .thenReturn(List.of(new Invoice()));
+
+        mockMvc.perform(get("/api/billing/invoices/customer/C1"))
+                .andExpect(status().isOk());
     }
 }

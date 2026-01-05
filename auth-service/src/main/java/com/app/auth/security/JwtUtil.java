@@ -61,7 +61,7 @@ public class JwtUtil {
         Instant now = Instant.now();
 
         return Jwts.builder()
-                .setSubject(String.valueOf(user.getId()))   // ✅ USER ID
+                .setSubject(String.valueOf(user.getId())) 
                 .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
                 .setIssuedAt(Date.from(now))
