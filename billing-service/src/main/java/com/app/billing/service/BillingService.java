@@ -1,20 +1,28 @@
 package com.app.billing.service;
 
 import com.app.billing.dto.CreateInvoiceRequest;
+import com.app.billing.dto.MonthlyRevenueDTO;
+import com.app.billing.dto.notification.CreateNotificationRequest;
+import com.app.billing.messaging.NotificationPublisher;
 import com.app.billing.model.*;
 import com.app.billing.repository.InvoiceRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
 public class BillingService {
 
     private final InvoiceRepository invoiceRepository;
+    private final NotificationPublisher notificationPublisher;
 
     // ================= CREATE INVOICE =================
     public void createInvoice(CreateInvoiceRequest request) {
@@ -53,9 +61,25 @@ public class BillingService {
                 .build();
 
         invoiceRepository.save(invoice);
+
+        // Send notification (NON-BLOCKING)
+        try {
+            notificationPublisher.send(
+                new CreateNotificationRequest(
+                    request.getCustomerId(),
+                    "CUSTOMER",
+                    "Invoice Generated",
+                    "Your invoice has been generated successfully",
+                    "INVOICE_CREATED"
+                )
+            );
+        } catch (Exception e) {
+            // log only — billing must not fail
+            System.err.println("Notification failed: " + e.getMessage());
+        }
     }
 
-    // ================= MARK PAYMENT PAID (DUMMY PAYMENT) =================
+    // ================= MARK PAYMENT PAID =================
     public Invoice markPaid(String bookingId) {
 
         Invoice invoice = invoiceRepository.findByBookingId(bookingId)
@@ -68,7 +92,7 @@ public class BillingService {
         return invoiceRepository.save(invoice);
     }
 
-    // ================= ADMIN / DEBUG =================
+    // ================= ADMIN =================
     public List<Invoice> getAllInvoices() {
         return invoiceRepository.findAll();
     }
@@ -76,5 +100,24 @@ public class BillingService {
     // ================= CUSTOMER =================
     public List<Invoice> getInvoicesByCustomer(String customerId) {
         return invoiceRepository.findByCustomerId(customerId);
+    }
+
+    // ================= REPORT =================
+    public Map<String, Double> getMonthlyRevenue() {
+
+        Map<String, Double> revenueMap = new LinkedHashMap<>();
+
+        List<MonthlyRevenueDTO> data = invoiceRepository.getMonthlyRevenue();
+
+        if (data == null || data.isEmpty()) {
+            return revenueMap;
+        }
+
+        data.forEach(r -> {
+            String key = r.getYear() + "-" + String.format("%02d", r.getMonth());
+            revenueMap.put(key, r.getTotalRevenue());
+        });
+
+        return revenueMap;
     }
 }

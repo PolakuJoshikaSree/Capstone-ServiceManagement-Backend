@@ -115,6 +115,7 @@ public class BookingService {
     }
 
     // ================= UPDATE STATUS =================
+ // ================= UPDATE STATUS =================
     public BookingResponse updateStatus(String bookingId, String statusValue) {
 
         Booking booking = bookingRepository.findByBookingId(bookingId)
@@ -136,7 +137,17 @@ public class BookingService {
 
             rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
 
-            log.info("BookingCompletedEvent sent for {}", bookingId);
+            notificationClient.sendNotification(
+                    CreateNotificationRequest.builder()
+                            .userId(booking.getTechnicianId())
+                            .role("TECHNICIAN")
+                            .title("Service Completed")
+                            .message("You have successfully completed booking " + booking.getBookingId())
+                            .type("SERVICE_COMPLETED")
+                            .build()
+            );
+
+            log.info("BookingCompletedEvent & Technician notification sent for {}", bookingId);
         }
 
         return new BookingResponse(
@@ -144,6 +155,7 @@ public class BookingService {
                 booking.getStatus().name()
         );
     }
+
 
     // ================= MAPPER =================
     private BookingListResponse toListResponse(Booking booking) {

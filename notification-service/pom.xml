@@ -6,6 +6,7 @@
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Spring Boot -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -24,38 +25,44 @@
 
     <dependencies>
 
-        <!-- Web -->
+        <!-- 🌐 REST APIs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- MongoDB -->
+        <!-- 🍃 MongoDB -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
-        <!-- Eureka Client -->
+        <!-- 📨 RabbitMQ (REQUIRED) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- 🧭 Eureka Client -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
 
-        <!-- Lombok -->
+        <!-- 🧰 Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <scope>provided</scope>
+            <optional>true</optional>
         </dependency>
 
-        <!-- Actuator (optional but good) -->
+        <!-- 📊 Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Test -->
+        <!-- 🧪 Tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -64,6 +71,7 @@
 
     </dependencies>
 
+    <!-- ☁️ Spring Cloud BOM -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -78,42 +86,43 @@
 
     <build>
         <plugins>
-        <plugin>
-    <groupId>org.jacoco</groupId>
-    <artifactId>jacoco-maven-plugin</artifactId>
-    <version>0.8.11</version>
-    <executions>
 
-        <!-- Attach JaCoCo agent -->
-        <execution>
-            <goals>
-                <goal>prepare-agent</goal>
-            </goals>
-        </execution>
+            <!-- ✅ JaCoCo Code Coverage -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
 
-        <!-- Generate coverage report -->
-        <execution>
-            <id>report</id>
-            <phase>test</phase>
-            <goals>
-                <goal>report</goal>
-            </goals>
-            <configuration>
-                <excludes>
-                    <exclude>**/model/**</exclude>
-                    <exclude>**/dto/**</exclude>
-                    <exclude>**/request/**</exclude>
-                </excludes>
-            </configuration>
-        </execution>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
 
-    </executions>
-</plugin>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/model/**</exclude>
+                                <exclude>**/dto/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
 
+                </executions>
+            </plugin>
+
+            <!-- Spring Boot Plugin -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
         </plugins>
     </build>
 

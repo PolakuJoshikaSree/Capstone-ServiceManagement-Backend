@@ -8,6 +8,7 @@ import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/billing/invoices")
@@ -46,4 +47,10 @@ public class BillingController {
                 billingService.getInvoicesByCustomer(customerId)
         );
     }
+    @GetMapping("/reports/monthly-revenue")
+    public ResponseEntity<Map<String, Double>> getMonthlyRevenue() {
+        return ResponseEntity.ok(billingService.getMonthlyRevenue());
+    }
+
+
 }
