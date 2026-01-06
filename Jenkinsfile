@@ -29,7 +29,7 @@ pipeline {
                         'auth-service',
                         'booking-service',
                         'billing-service',
-                        'notification-service'
+                        'notification-service',
                         'Service-catalog'
                     ]
 
