@@ -30,6 +30,7 @@ pipeline {
                         'booking-service',
                         'billing-service',
                         'notification-service'
+                        'Service-catalog'
                     ]
 
                     for (service in services) {
@@ -49,7 +50,7 @@ pipeline {
                         'auth-service',
                         'booking-service',
                         'billing-service',
-                        'service-catalog'
+                        'Service-catalog'
                     ]
 
                     for (service in services) {
