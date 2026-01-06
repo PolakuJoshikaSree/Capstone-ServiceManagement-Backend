@@ -19,24 +19,52 @@ pipeline {
             }
         }
 
-        stage('Build All Services') {
+        stage('Build Microservices') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                script {
+                    def services = [
+                        'service-registry',
+                        'config-server',
+                        'api-gateway',
+                        'auth-service',
+                        'booking-service',
+                        'billing-service',
+                        'notification-service'
+                    ]
+
+                    for (service in services) {
+                        echo "🔨 Building ${service}"
+                        dir(service) {
+                            sh 'mvn clean package -DskipTests'
+                        }
+                    }
+                }
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh 'mvn test'
+                script {
+                    def services = [
+                        'auth-service',
+                        'booking-service',
+                        'billing-service',
+                        'service-catalog'
+                    ]
+
+                    for (service in services) {
+                        echo "🧪 Testing ${service}"
+                        dir(service) {
+                            sh 'mvn test'
+                        }
+                    }
+                }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh '''
-                docker --version
-                docker compose build
-                '''
+                sh 'docker compose build'
             }
         }
 
@@ -52,10 +80,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Pipeline completed successfully'
+            echo '✅ Capstone backend pipeline completed successfully'
         }
         failure {
-            echo '❌ Pipeline failed'
+            echo '❌ Capstone backend pipeline failed'
         }
     }
 }
