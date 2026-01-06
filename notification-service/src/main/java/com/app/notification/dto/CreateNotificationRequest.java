@@ -1,13 +1,14 @@
 package com.app.notification.dto;
 
-import lombok.Data;
+import lombok.*;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CreateNotificationRequest {
 
     private String userId;
-    private String role;
-    private String title;
     private String message;
     private String type;
 }

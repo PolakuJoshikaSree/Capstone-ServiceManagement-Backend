@@ -29,8 +29,6 @@ class NotificationServiceTest {
     void createNotification_shouldSaveNotification() {
         CreateNotificationRequest request = new CreateNotificationRequest();
         request.setUserId("U1");
-        request.setRole("CUSTOMER");
-        request.setTitle("Test");
         request.setMessage("Test message");
         request.setType("BOOKING_CREATED");
 

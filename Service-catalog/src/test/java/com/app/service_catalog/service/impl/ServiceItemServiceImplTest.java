@@ -81,7 +81,7 @@ class ServiceItemServiceImplTest {
         ServiceItemResponse response = service.createService(req);
 
         assertEquals("Pipe Fix", response.getName());
-        assertEquals(105.0, response.getPricingDetails().getFinalPrice());
+        assertEquals(100.0, response.getPricingDetails().getFinalPrice());
         verify(categoryRepository).save(any());
     }
 

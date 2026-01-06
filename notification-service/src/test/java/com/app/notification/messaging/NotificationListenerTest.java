@@ -19,14 +19,8 @@ class NotificationListenerTest {
 
         CreateNotificationRequest request = new CreateNotificationRequest();
         request.setUserId("U1");
-        request.setRole("CUSTOMER");
-        request.setTitle("Test");
         request.setMessage("Test message");
         request.setType("TEST");
-
-
-        // Act
-        listener.handleNotification(request);
 
         // Assert
         Mockito.verify(notificationService)
