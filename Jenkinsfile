@@ -19,34 +19,35 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build & Test Services') {
             steps {
-                sh 'mvn -q clean package -DskipTests'
-            }
-        }
+                script {
+                    def services = [
+                        'auth-service',
+                        'booking-service',
+                        'billing-service',
+                        'notification-service',
+                        'Service-catalog',
+                        'api-gateway',
+                        'service-registry'
+                    ]
 
-        stage('Test (No Eureka / DB)') {
-            steps {
-                sh 'mvn -q test -Dspring.cloud.discovery.enabled=false -Deureka.client.enabled=false'
-            }
-        }
-
-        stage('Docker Build (Optional)') {
-            when {
-                expression { sh(script: 'which docker', returnStatus: true) == 0 }
-            }
-            steps {
-                sh 'docker compose build'
+                    for (s in services) {
+                        dir(s) {
+                            sh '''
+                              mvn -q clean test \
+                              -Deureka.client.enabled=false \
+                              -Dspring.cloud.discovery.enabled=false
+                            '''
+                        }
+                    }
+                }
             }
         }
     }
 
     post {
-        success {
-            echo ' Pipeline completed successfully'
-        }
-        failure {
-            echo ' Pipeline failed'
-        }
+        success { echo ' Pipeline SUCCESS' }
+        failure { echo ' Pipeline FAILED' }
     }
 }
