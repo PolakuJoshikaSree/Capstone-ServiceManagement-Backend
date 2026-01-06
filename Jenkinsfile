@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven'
-        jdk 'jdk17'
+        maven 'Maven3'
+        jdk 'JDK17'
     }
 
     environment {
@@ -52,10 +52,10 @@ pipeline {
 
     post {
         success {
-            echo ' Pipeline completed successfully'
+            echo '✅ Pipeline completed successfully'
         }
         failure {
-            echo ' Pipeline failed'
+            echo '❌ Pipeline failed'
         }
     }
 }
