@@ -1,5 +1,5 @@
+com/app/gateway/config/CorsConfig.class
+com/app/gateway/config/SecurityConfig.class
 com/app/gateway/exception/GlobalExceptionHandler.class
 com/app/gateway/ApiGatewayApplication.class
-com/app/gateway/config/CorsConfig.class
 com/app/gateway/payload/ApiResponse.class
-com/app/gateway/config/SecurityConfig.class

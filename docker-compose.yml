@@ -36,11 +36,22 @@ services:
       - service-registry
       - config-server
 
+  service-catalog:
+    build: ./Service-catalog
+    container_name: service-catalog
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - service-registry
+      - config-server
+
   booking-service:
     build: ./booking-service
     container_name: booking-service
     ports:
-      - "8082:8082"
+      - "8084:8084"
     depends_on:
       - service-registry
       - config-server
@@ -58,7 +69,7 @@ services:
     build: ./notification-service
     container_name: notification-service
     ports:
-      - "8084:8084"
+      - "8087:8087"
     depends_on:
       - service-registry
       - config-server
