@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        SPRING_PROFILES_ACTIVE = 'docker'
+        SPRING_PROFILES_ACTIVE = 'test'
     }
 
     stages {
@@ -19,72 +19,34 @@ pipeline {
             }
         }
 
-        stage('Build Microservices') {
+        stage('Build') {
             steps {
-                script {
-                    def services = [
-                        'service-registry',
-                        'config-server',
-                        'api-gateway',
-                        'auth-service',
-                        'booking-service',
-                        'billing-service',
-                        'notification-service',
-                        'Service-catalog'
-                    ]
-
-                    for (service in services) {
-                        echo "🔨 Building ${service}"
-                        dir(service) {
-                            sh 'mvn clean package -DskipTests'
-                        }
-                    }
-                }
+                sh 'mvn -q clean package -DskipTests'
             }
         }
 
-        stage('Run Tests') {
+        stage('Test (No Eureka / DB)') {
             steps {
-                script {
-                    def services = [
-                        'auth-service',
-                        'booking-service',
-                        'billing-service',
-                        'Service-catalog'
-                    ]
-
-                    for (service in services) {
-                        echo "🧪 Testing ${service}"
-                        dir(service) {
-                            sh 'mvn test'
-                        }
-                    }
-                }
+                sh 'mvn -q test -Dspring.cloud.discovery.enabled=false -Deureka.client.enabled=false'
             }
         }
 
-        stage('Docker Build') {
+        stage('Docker Build (Optional)') {
+            when {
+                expression { sh(script: 'which docker', returnStatus: true) == 0 }
+            }
             steps {
                 sh 'docker compose build'
-            }
-        }
-
-        stage('Docker Deploy') {
-            steps {
-                sh '''
-                docker compose down
-                docker compose up -d
-                '''
             }
         }
     }
 
     post {
         success {
-            echo '✅ Capstone backend pipeline completed successfully'
+            echo ' Pipeline completed successfully'
         }
         failure {
-            echo '❌ Capstone backend pipeline failed'
+            echo ' Pipeline failed'
         }
     }
 }
