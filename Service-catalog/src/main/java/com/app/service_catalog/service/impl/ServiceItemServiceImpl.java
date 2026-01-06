@@ -27,7 +27,8 @@ public class ServiceItemServiceImpl implements ServiceItemService {
     @Override
     public ServiceItemResponse createService(CreateServiceRequest request) {
 
-        ServiceCategory category = categoryRepository.findById(request.getCategoryId())
+        ServiceCategory category = categoryRepository
+                .findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
 
         ServiceItem service = ServiceItem.builder()
@@ -38,13 +39,9 @@ public class ServiceItemServiceImpl implements ServiceItemService {
                 .basePrice(request.getBasePrice())
                 .currency(request.getCurrency() == null ? "USD" : request.getCurrency())
                 .estimatedDurationMinutes(
-                        request.getEstimatedDurationMinutes() == null ? 0 : request.getEstimatedDurationMinutes()
+                    request.getEstimatedDurationMinutes() == null ? 0 : request.getEstimatedDurationMinutes()
                 )
-                .imageUrl(request.getImageUrl())
                 .requiredSkills(request.getRequiredSkills())
-                .taxPercentage(request.getTaxPercentage() == null ? 0 : request.getTaxPercentage())
-                .discountPercentage(request.getDiscountPercentage() == null ? 0 : request.getDiscountPercentage())
-                .discountValidUntil(request.getDiscountValidUntil())
                 .active(true)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
@@ -52,12 +49,12 @@ public class ServiceItemServiceImpl implements ServiceItemService {
 
         ServiceItem saved = serviceRepository.save(service);
 
-        // increment category service count
         category.setServicesCount(category.getServicesCount() + 1);
         categoryRepository.save(category);
 
         return mapToResponse(saved);
     }
+
 
     @Override
     public List<ServiceItemResponse> getAllServices() {

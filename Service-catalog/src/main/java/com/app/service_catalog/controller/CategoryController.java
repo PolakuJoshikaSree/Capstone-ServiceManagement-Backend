@@ -20,7 +20,7 @@ public class CategoryController {
     // ---------------- CREATE (ADMIN ONLY) ----------------
     @PostMapping
     public CategoryResponse create(
-            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestHeader(value = "X-USER-ROLES", required = false) String roles,
             @Valid @RequestBody CreateCategoryRequest request) {
 
         requireAdmin(roles);
@@ -56,7 +56,7 @@ public class CategoryController {
     // ---------------- UPDATE (ADMIN ONLY) ----------------
     @PutMapping("/{id}")
     public CategoryResponse update(
-            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestHeader(value = "X-USER-ROLES", required = false) String roles,
             @PathVariable String id,
             @RequestBody UpdateCategoryRequest request) {
 
@@ -67,7 +67,7 @@ public class CategoryController {
     // ---------------- TOGGLE STATUS (ADMIN ONLY) ----------------
     @PutMapping("/{id}/status")
     public CategoryResponse updateStatus(
-            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestHeader(value = "X-USER-ROLES", required = false) String roles,
             @PathVariable String id,
             @RequestBody UpdateCategoryStatusRequest request) {
 
@@ -78,7 +78,7 @@ public class CategoryController {
     // ---------------- REORDER (ADMIN ONLY) ----------------
     @PutMapping("/reorder")
     public void reorder(
-            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestHeader(value = "X-USER-ROLES", required = false) String roles,
             @RequestBody List<ReorderCategoryRequest> requests) {
 
         requireAdmin(roles);
@@ -88,17 +88,18 @@ public class CategoryController {
     // ---------------- DELETE (ADMIN ONLY) ----------------
     @DeleteMapping("/{id}")
     public void delete(
-            @RequestHeader("X-USER-ROLES") String roles,
+            @RequestHeader(value = "X-USER-ROLES", required = false) String roles,
             @PathVariable String id) {
 
         requireAdmin(roles);
         categoryService.deleteCategory(id);
     }
 
-    // ===== helpers =====
+    // ===== helper =====
     private void requireAdmin(String roles) {
-        if (!roles.contains("ROLE_ADMIN")) {
-            throw new SecurityException("Forbidden");
+        if (roles == null || !roles.contains("ROLE_ADMIN")) {
+            throw new SecurityException("Admin access required");
         }
     }
+    
 }

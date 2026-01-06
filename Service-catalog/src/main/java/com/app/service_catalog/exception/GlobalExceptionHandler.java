@@ -15,6 +15,23 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+	
+	@ExceptionHandler(SecurityException.class)
+	public ResponseEntity<ApiErrorResponse> handleSecurityException(
+	        SecurityException ex,
+	        HttpServletRequest request) {
+
+	    ApiErrorResponse response = ApiErrorResponse.builder()
+	            .timestamp(Instant.now())
+	            .status(HttpStatus.FORBIDDEN.value())
+	            .error("Forbidden")
+	            .message(ex.getMessage())
+	            .path(request.getRequestURI())
+	            .build();
+
+	    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+	}
+
 
     /* ---------------- VALIDATION ERRORS ---------------- */
 

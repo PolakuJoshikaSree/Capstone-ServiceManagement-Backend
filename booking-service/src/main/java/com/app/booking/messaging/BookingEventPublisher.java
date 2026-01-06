@@ -7,14 +7,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class NotificationPublisher {
+public class BookingEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
     public void send(CreateNotificationRequest request) {
         rabbitTemplate.convertAndSend(
-                "notification.exchange",
-                "notification.key",
+                "booking.exchange",    
+                "booking.created",    
                 request
         );
     }
