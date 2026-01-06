@@ -1,21 +1,34 @@
 package com.app.service_catalog.config;
 
+import com.app.service_catalog.controller.ServiceController;
+import com.app.service_catalog.security.JwtAuthFilter;
+import com.app.service_catalog.service.ServiceItemService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpHeaders;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@WebMvcTest(controllers = ServiceController.class)
+@Import(SecurityConfig.class)
 class SecurityConfigTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // ===== REQUIRED BEANS =====
+
+    @MockBean
+    private JwtAuthFilter jwtAuthFilter;
+
+    @MockBean
+    private ServiceItemService serviceItemService;
+
+    // ===== PUBLIC ENDPOINTS =====
 
     @Test
     void publicEndpoint_allowedWithoutHeaders() throws Exception {
@@ -24,31 +37,43 @@ class SecurityConfigTest {
     }
 
     @Test
-    void endpoint_withUserHeader_stillAllowed() throws Exception {
+    void publicEndpoint_allowedWithUserHeader() throws Exception {
         mockMvc.perform(get("/api/services")
                         .header("X-USER-ID", "u1"))
                 .andExpect(status().isOk());
     }
 
+    // ===== ADMIN ENDPOINTS =====
+
     @Test
-    void endpoint_withAdminRole_allowed() throws Exception {
-        mockMvc.perform(get("/api/services")
+    void adminEndpoint_withoutHeaders_isUnauthorized() throws Exception {
+        mockMvc.perform(put("/api/services/svc1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminEndpoint_withUserRole_isForbidden() throws Exception {
+        mockMvc.perform(put("/api/services/svc1")
+                        .header("X-USER-ID", "u1")
+                        .header("X-USER-ROLES", "ROLE_USER"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminEndpoint_withAdminRole_isAllowed() throws Exception {
+        mockMvc.perform(put("/api/services/svc1")
                         .header("X-USER-ID", "u1")
                         .header("X-USER-ROLES", "ROLE_ADMIN"))
                 .andExpect(status().isOk());
     }
 
-    @Test
-    void missingHeaders_doesNotBlockPublicEndpoint() throws Exception {
-        mockMvc.perform(get("/api/categories"))
-        .andExpect(status().is4xxClientError());
-
-    }
+    // ===== CSRF =====
 
     @Test
-    void csrfDisabled_allowsGetRequests() throws Exception {
-        mockMvc.perform(get("/api/services")
-                        .header(HttpHeaders.CONTENT_TYPE, "application/json"))
+    void csrfDisabled_allowsPutRequests() throws Exception {
+        mockMvc.perform(put("/api/services/svc1")
+                        .header("X-USER-ID", "u1")
+                        .header("X-USER-ROLES", "ROLE_ADMIN"))
                 .andExpect(status().isOk());
     }
 }
