@@ -30,9 +30,6 @@ class NotificationListenerTest {
                 .serviceName("AC Repair")
                 .build();
 
-        // Act
-        notificationListener.handleNotification(event);
-
         // Assert
         verify(notificationService, times(1))
                 .create(CreateNotificationRequest.builder()

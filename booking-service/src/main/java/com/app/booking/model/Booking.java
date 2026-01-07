@@ -41,4 +41,7 @@ public class Booking {
     private BookingStatus status;
 
     private LocalDateTime createdAt;
+    
+    private String serviceId;    
+    private double servicePrice; 
 }

@@ -1,10 +1,17 @@
 package com.app.booking.service;
 
+import com.app.booking.client.BillingClient;
 import com.app.booking.client.NotificationClient;
 import com.app.booking.dto.CreateNotificationRequest;
+import com.app.booking.dto.billing.CreateInvoiceRequest;
+import com.app.booking.dto.billing.InvoiceLineItem;
 import com.app.booking.dto.request.CreateBookingRequest;
+import com.app.booking.dto.request.RescheduleBookingRequest;
 import com.app.booking.dto.response.BookingListResponse;
 import com.app.booking.dto.response.BookingResponse;
+import com.app.booking.dto.response.CancelBookingResponse;
+import com.app.booking.dto.response.RescheduleBookingResponse;
+import com.app.booking.event.BookingCancelledEvent;
 import com.app.booking.event.BookingCompletedEvent;
 import com.app.booking.exception.BookingNotFoundException;
 import com.app.booking.model.Booking;
@@ -20,7 +27,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.app.booking.config.RabbitConfig.EXCHANGE;
-import static com.app.booking.config.RabbitConfig.ROUTING_KEY;
 
 @Service
 @RequiredArgsConstructor
@@ -30,15 +36,28 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final NotificationClient notificationClient;
     private final RabbitTemplate rabbitTemplate;
+    private final BillingClient billingClient;
 
     // ================= CREATE BOOKING =================
     public BookingResponse createBooking(CreateBookingRequest request, String customerId) {
+
+        double servicePrice =
+                500 + (Math.random() * 1500);  
+
+        // round to 2 decimals & ensure non-zero
+        servicePrice = Math.max(100,
+                Math.round(servicePrice * 100.0) / 100.0
+        );
+
+        log.info("💰 Generated price = ₹{} for service {}",
+                servicePrice, request.getServiceName());
 
         Booking booking = Booking.builder()
                 .bookingId("BK-" + UUID.randomUUID().toString().substring(0, 8))
                 .customerId(customerId)
                 .serviceName(request.getServiceName())
                 .categoryName(request.getCategoryName())
+                .servicePrice(servicePrice)   // 🔒 LOCKED
                 .scheduledDate(request.getScheduledDate())
                 .timeSlot(request.getTimeSlot())
                 .address(request.getAddress())
@@ -55,7 +74,10 @@ public class BookingService {
                         .userId(customerId)
                         .role("CUSTOMER")
                         .title("Booking Created")
-                        .message("Your booking " + booking.getBookingId() + " was created successfully")
+                        .message(
+                            "Your booking " + booking.getBookingId()
+                            + " was created. Price: ₹" + servicePrice
+                        )
                         .type("BOOKING_CREATED")
                         .build()
         );
@@ -65,6 +87,7 @@ public class BookingService {
                 booking.getStatus().name()
         );
     }
+
 
     // ================= READ =================
     public List<BookingListResponse> getAllBookings() {
@@ -115,39 +138,73 @@ public class BookingService {
     }
 
     // ================= UPDATE STATUS =================
- // ================= UPDATE STATUS =================
     public BookingResponse updateStatus(String bookingId, String statusValue) {
 
         Booking booking = bookingRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
-        BookingStatus newStatus = BookingStatus.valueOf(statusValue.toUpperCase());
+        BookingStatus newStatus;
+        try {
+            newStatus = BookingStatus.valueOf(statusValue.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid booking status");
+        }
+
+        BookingStatus currentStatus = booking.getStatus();
+
+        if (currentStatus == BookingStatus.CANCELLED || currentStatus == BookingStatus.COMPLETED) {
+            throw new IllegalArgumentException("Booking cannot be updated");
+        }
+
+        boolean validTransition =
+                (currentStatus == BookingStatus.ASSIGNED && newStatus == BookingStatus.IN_PROGRESS) ||
+                (currentStatus == BookingStatus.IN_PROGRESS && newStatus == BookingStatus.COMPLETED);
+
+        if (!validTransition) {
+            throw new IllegalArgumentException(
+                    "Invalid status transition: " + currentStatus + " → " + newStatus
+            );
+        }
+
         booking.setStatus(newStatus);
         bookingRepository.save(booking);
 
+        // ================= COMPLETED =================
         if (newStatus == BookingStatus.COMPLETED) {
 
-            log.info("Booking {} completed. Publishing event...", bookingId);
+            rabbitTemplate.convertAndSend(
+                    EXCHANGE,
+                    "booking.completed",
+                    BookingCompletedEvent.builder()
+                            .bookingId(booking.getBookingId())
+                            .customerId(booking.getCustomerId())
+                            .serviceName(booking.getServiceName())
+                            .build()
+            );
 
-            BookingCompletedEvent event = BookingCompletedEvent.builder()
-                    .bookingId(booking.getBookingId())
-                    .customerId(booking.getCustomerId())
-                    .serviceName(booking.getServiceName())
-                    .build();
-
-            rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
+            billingClient.createInvoice(
+                    CreateInvoiceRequest.builder()
+                            .bookingId(booking.getBookingId())
+                            .customerId(booking.getCustomerId())
+                            .items(List.of(
+                                    new InvoiceLineItem(
+                                            booking.getServiceName(),
+                                            booking.getServicePrice(), // 🔥 SAME RANDOM PRICE
+                                            1
+                                    )
+                            ))
+                            .build()
+            );
 
             notificationClient.sendNotification(
                     CreateNotificationRequest.builder()
                             .userId(booking.getTechnicianId())
                             .role("TECHNICIAN")
                             .title("Service Completed")
-                            .message("You have successfully completed booking " + booking.getBookingId())
+                            .message("You completed booking " + booking.getBookingId())
                             .type("SERVICE_COMPLETED")
                             .build()
             );
-
-            log.info("BookingCompletedEvent & Technician notification sent for {}", bookingId);
         }
 
         return new BookingResponse(
@@ -156,6 +213,59 @@ public class BookingService {
         );
     }
 
+    // ================= CANCEL =================
+    public CancelBookingResponse cancelBooking(String bookingId, String userId) {
+
+        Booking booking = bookingRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        if (booking.getStatus() == BookingStatus.COMPLETED) {
+            throw new IllegalArgumentException("Completed bookings cannot be cancelled");
+        }
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+
+        rabbitTemplate.convertAndSend(
+                EXCHANGE,
+                "booking.cancelled",
+                BookingCancelledEvent.builder()
+                        .bookingId(booking.getBookingId())
+                        .customerId(booking.getCustomerId())
+                        .serviceName(booking.getServiceName())
+                        .build()
+        );
+
+        return CancelBookingResponse.builder()
+                .bookingId(bookingId)
+                .status("CANCELLED")
+                .message("Booking cancelled successfully")
+                .build();
+    }
+
+    // ================= RESCHEDULE =================
+    public RescheduleBookingResponse rescheduleBooking(
+            String bookingId,
+            RescheduleBookingRequest request
+    ) {
+        Booking booking = bookingRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        if (booking.getStatus() == BookingStatus.COMPLETED
+                || booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new IllegalArgumentException("Booking cannot be rescheduled");
+        }
+
+        booking.setScheduledDate(request.getScheduledDate());
+        booking.setTimeSlot(request.getTimeSlot());
+        bookingRepository.save(booking);
+
+        return RescheduleBookingResponse.builder()
+                .bookingId(bookingId)
+                .status(booking.getStatus().name())
+                .message("Booking rescheduled successfully")
+                .build();
+    }
 
     // ================= MAPPER =================
     private BookingListResponse toListResponse(Booking booking) {

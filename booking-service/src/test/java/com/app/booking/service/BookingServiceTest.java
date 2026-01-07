@@ -1,12 +1,15 @@
 package com.app.booking.service;
 
+import com.app.booking.client.BillingClient;
 import com.app.booking.client.NotificationClient;
+import com.app.booking.dto.billing.CreateInvoiceRequest;
 import com.app.booking.dto.request.CreateBookingRequest;
 import com.app.booking.event.BookingCompletedEvent;
 import com.app.booking.exception.BookingNotFoundException;
 import com.app.booking.model.Booking;
 import com.app.booking.model.BookingStatus;
 import com.app.booking.repository.BookingRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -20,21 +23,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BookingServiceTest {
 
-    private final BookingRepository bookingRepository =
-            Mockito.mock(BookingRepository.class);
+    private BookingRepository bookingRepository;
+    private NotificationClient notificationClient;
+    private RabbitTemplate rabbitTemplate;
+    private BillingClient billingClient;
 
-    private final NotificationClient notificationClient =
-            Mockito.mock(NotificationClient.class);
+    private BookingService service;
 
-    private final RabbitTemplate rabbitTemplate =
-            Mockito.mock(RabbitTemplate.class);
-
-    private final BookingService service =
-            new BookingService(
-                    bookingRepository,
-                    notificationClient,
-                    rabbitTemplate
-            );
+    @BeforeEach
+    void setup() {
+        bookingRepository = Mockito.mock(BookingRepository.class);
+        notificationClient = Mockito.mock(NotificationClient.class);
+        rabbitTemplate = Mockito.mock(RabbitTemplate.class);
+        billingClient = Mockito.mock(BillingClient.class);
+    }
 
     // ---------- CREATE BOOKING ----------
     @Test
@@ -58,7 +60,8 @@ class BookingServiceTest {
         assertNotNull(response.getBookingId());
         assertEquals("REQUESTED", response.getStatus());
 
-        Mockito.verify(notificationClient).sendNotification(Mockito.any());
+        Mockito.verify(notificationClient)
+                .sendNotification(Mockito.any());
     }
 
     // ---------- READ ----------
@@ -121,7 +124,9 @@ class BookingServiceTest {
         var response = service.assignTechnician("BK1", "TECH1");
 
         assertEquals("ASSIGNED", response.getStatus());
-        Mockito.verify(notificationClient).sendNotification(Mockito.any());
+
+        Mockito.verify(notificationClient)
+                .sendNotification(Mockito.any());
     }
 
     @Test
@@ -138,38 +143,34 @@ class BookingServiceTest {
 
     // ---------- UPDATE STATUS (NON-COMPLETED) ----------
     @Test
-    void updateStatus_assigned_only() {
+    void updateStatus_toInProgress_noBilling() {
 
         Booking booking = Booking.builder()
                 .bookingId("BK1")
-                .status(BookingStatus.REQUESTED)
+                .status(BookingStatus.ASSIGNED)
                 .build();
 
         Mockito.when(bookingRepository.findByBookingId("BK1"))
                 .thenReturn(Optional.of(booking));
 
-        var response = service.updateStatus("BK1", "ASSIGNED");
+        var response = service.updateStatus("BK1", "IN_PROGRESS");
 
-        assertEquals("ASSIGNED", response.getStatus());
+        assertEquals("IN_PROGRESS", response.getStatus());
 
-        Mockito.verify(rabbitTemplate, Mockito.never())
-        .convertAndSend(
-            Mockito.anyString(),
-            Mockito.anyString(),
-            Mockito.any(Object.class)
-        );
-
+        Mockito.verify(billingClient, Mockito.never())
+                .createInvoice(Mockito.any());
     }
 
     // ---------- UPDATE STATUS (COMPLETED) ----------
     @Test
-    void updateStatus_completed_triggersEventAndNotification() {
+    void updateStatus_completed_triggersEvent_notification_and_billing() {
 
         Booking booking = Booking.builder()
                 .bookingId("BK1")
                 .customerId("C1")
                 .technicianId("T1")
-                .serviceName("AC")
+                .serviceName("AC Repair")
+                .servicePrice(1200)
                 .status(BookingStatus.IN_PROGRESS)
                 .build();
 
@@ -180,14 +181,29 @@ class BookingServiceTest {
 
         assertEquals("COMPLETED", response.getStatus());
 
-        ArgumentCaptor<BookingCompletedEvent> captor =
+        // RabbitMQ event
+        ArgumentCaptor<BookingCompletedEvent> eventCaptor =
                 ArgumentCaptor.forClass(BookingCompletedEvent.class);
 
         Mockito.verify(rabbitTemplate)
-                .convertAndSend(Mockito.any(), Mockito.any(), captor.capture());
+                .convertAndSend(Mockito.any(), Mockito.any(), eventCaptor.capture());
 
+        assertEquals("BK1", eventCaptor.getValue().getBookingId());
+
+        // Notification
         Mockito.verify(notificationClient)
                 .sendNotification(Mockito.any());
+
+        // 🔥 Billing invoice
+        ArgumentCaptor<CreateInvoiceRequest> invoiceCaptor =
+                ArgumentCaptor.forClass(CreateInvoiceRequest.class);
+
+        Mockito.verify(billingClient)
+                .createInvoice(invoiceCaptor.capture());
+
+        assertEquals("BK1", invoiceCaptor.getValue().getBookingId());
+        assertEquals("C1", invoiceCaptor.getValue().getCustomerId());
+        assertEquals(1200, invoiceCaptor.getValue().getItems().get(0).getUnitPrice());
     }
 
     @Test

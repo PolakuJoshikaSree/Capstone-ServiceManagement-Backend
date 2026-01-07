@@ -3,6 +3,8 @@ package com.app.service_catalog.controller;
 import com.app.service_catalog.dto.request.CreateServiceRequest;
 import com.app.service_catalog.dto.request.UpdateServiceRequest;
 import com.app.service_catalog.dto.response.ServiceItemResponse;
+import com.app.service_catalog.model.ServiceItem;
+import com.app.service_catalog.repository.ServiceItemRepository;
 import com.app.service_catalog.service.ServiceItemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +17,9 @@ import java.util.List;
 public class ServiceController {
 
     private final ServiceItemService serviceItemService;
+    private final ServiceItemRepository serviceItemRepository;
+
+    // ================= CRUD =================
 
     @PostMapping
     public ServiceItemResponse create(
@@ -76,7 +81,27 @@ public class ServiceController {
 
         return serviceItemService.search(query, skill);
     }
+    @GetMapping("/price")
+    public Double getServicePrice(
+            @RequestParam String serviceName,
+            @RequestParam String categoryName
+    ) {
+        ServiceItem service = serviceItemRepository.findAll()
+                .stream()
+                .filter(s ->
+                        s.isActive()
+                        && s.getName().equalsIgnoreCase(serviceName)
+                        && s.getCategoryName().equalsIgnoreCase(categoryName)
+                )
+                .findFirst()
+                .orElseThrow(() ->
+                        new RuntimeException("Service not found"));
 
+        return Math.round(service.getBasePrice() * 100.0) / 100.0;
+    }
+
+
+    // ================= SECURITY =================
     private void requireAdmin(String roles) {
         if (roles == null || !roles.contains("ROLE_ADMIN")) {
             throw new SecurityException("Admin access required");

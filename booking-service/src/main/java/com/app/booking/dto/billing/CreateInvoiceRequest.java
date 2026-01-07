@@ -11,5 +11,6 @@ public class CreateInvoiceRequest {
 
     private String bookingId;
     private String customerId;
+    private double subtotal;
     private List<InvoiceLineItem> items;
 }

@@ -15,10 +15,13 @@ public class NotificationService {
 
     private final NotificationRepository repository;
 
+
     public Notification create(CreateNotificationRequest request) {
 
         Notification notification = Notification.builder()
                 .userId(request.getUserId())
+                .role(request.getRole())
+                .title(request.getTitle())
                 .message(request.getMessage())
                 .type(request.getType())
                 .read(false)
@@ -27,6 +30,7 @@ public class NotificationService {
 
         return repository.save(notification);
     }
+
 
 
     public List<Notification> getForUser(String userId) {

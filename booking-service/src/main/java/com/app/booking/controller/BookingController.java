@@ -1,6 +1,7 @@
 package com.app.booking.controller;
 
 import com.app.booking.dto.request.CreateBookingRequest;
+import com.app.booking.dto.request.RescheduleBookingRequest;
 import com.app.booking.dto.response.BookingListResponse;
 import com.app.booking.dto.response.BookingResponse;
 import com.app.booking.service.BookingService;
@@ -119,4 +120,35 @@ public class BookingController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+ // ================= CANCEL BOOKING =================
+    @PutMapping("/{bookingId}/cancel")
+    public ResponseEntity<?> cancelBooking(
+            Authentication auth,
+            @PathVariable String bookingId
+    ) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(
+                bookingService.cancelBooking(bookingId, auth.getName())
+        );
+    }
+
+    // ================= RESCHEDULE BOOKING =================
+    @PutMapping("/{bookingId}/reschedule")
+    public ResponseEntity<?> rescheduleBooking(
+            Authentication auth,
+            @PathVariable String bookingId,
+            @Valid @RequestBody RescheduleBookingRequest request
+    ) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(
+                bookingService.rescheduleBooking(bookingId, request)
+        );
+    }
+
 }

@@ -10,6 +10,5 @@ public interface ServiceCategoryRepository
 
     List<ServiceCategory> findByActiveTrueOrderByDisplayOrderAsc();
 
-    // ✅ Used to block duplicates BEFORE saving
     boolean existsByNameIgnoreCase(String name);
 }
