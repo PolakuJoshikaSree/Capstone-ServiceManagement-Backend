@@ -110,7 +110,3 @@ RabbitMQ is used for asynchronous communication. Events such as Booking Complete
 
 Joshika Sree Polaku  
 Capstone Project – Service Management System
-
-##  License
-
-This project is developed for academic purposes as part of a capstone submission.
